@@ -1,0 +1,10 @@
+edition = "2021"
+use_small_heuristics = "Off"
+fn_call_width = 0
+array_width = 0
+chain_width = 0
+max_width = 40
+struct_lit_width = 0
+struct_variant_width = 0
+where_single_line = false
+imports_layout = "Vertical"
