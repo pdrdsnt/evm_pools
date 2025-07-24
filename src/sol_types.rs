@@ -1,3 +1,7 @@
+use alloy::primitives::Address;
+
+use crate::v3_state::V3State;
+
 alloy_sol_types::sol! {
 
 type IHooks is address;
@@ -128,3 +132,14 @@ contract V3Pool {
     /// @return The max amount of liquidity per tick
     function maxLiquidityPerTick() external view returns (uint128);
 }   }
+impl From<&V3State> for PoolKey {
+    fn from(value: &V3State) -> Self {
+        PoolKey {
+            currency0: value.token0,
+            currency1: value.token1,
+            fee: value.fee,
+            tickSpacing: value.tick_spacing,
+            hooks: Address::ZERO,
+        }
+    }
+}

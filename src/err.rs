@@ -1,12 +1,18 @@
+use alloy::primitives::{
+    U256, aliases::I24,
+};
+
+use crate::v3_state::TradeState;
+
 #[derive(Debug)]
 pub enum TickError {
-    Overflow(i16),
-    Underflow(i16),
+    Overflow(TradeState),
+    Underflow(TradeState),
+    Unavailable(TradeState),
 }
 #[derive(Debug)]
 pub enum MathError {
-    A,
-    B,
+    A(TradeState),
 }
 
 #[derive(Debug)]

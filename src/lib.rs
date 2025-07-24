@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
-use alloy::primitives::{
-    Address, aliases::U24,
-};
+use alloy::primitives::{Address, aliases::U24};
 
 use crate::sol_types::PoolKey;
 mod err;
@@ -11,23 +9,26 @@ mod sol_types;
 mod tick_math;
 mod v3_state;
 //USDC BSC-USD pool
-const v3_usdc_usd_addr: &str = "0x2C3c320D49019D4f9A92352e947c7e5AcFE47D68";
+const v3_usdc_usd_addr: &str =
+    "0x2C3c320D49019D4f9A92352e947c7e5AcFE47D68";
 //usdt - bnb
-const v3_usdt_bnb_addr: &str = "0x47a90A2d92A8367A91EfA1906bFc8c1E05bf10c4";
+const v3_usdt_bnb_addr: &str =
+    "0x47a90A2d92A8367A91EfA1906bFc8c1E05bf10c4";
 //cake - BSC-USD v3
-const v3_cake_usd_addr: &str = "0xFe4fe5B4575c036aC6D5cCcFe13660020270e27A";
+const v3_cake_usd_addr: &str =
+    "0xFe4fe5B4575c036aC6D5cCcFe13660020270e27A";
 
-const v4_addr: &str = "0xd13Dd3D6E93f276FAfc9Db9E6BB47C1180aeE0c4";
+const v4_addr: &str =
+    "0xd13Dd3D6E93f276FAfc9Db9E6BB47C1180aeE0c4";
 
-const bnb_provider: &str =
-    "https://binance.llamarpc.com";
+const bnb_provider: &str = "https://binance.llamarpc.com";
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
     use alloy::{
         primitives::{
-            Address, U256, aliases::I24,
+            Address, U256, aliases::I24, map::HashMap,
         },
         transports::http::reqwest::Url,
     };
@@ -41,30 +42,19 @@ mod tests {
     use super::*;
     #[tokio::test]
     pub async fn v3_0() {
-        println!(
-            "testing for usdc bsc v3 pool"
-        );
-        let mut any_pool =
-            generator::create_v3(
-                Url::from_str(
-                    bnb_provider,
-                )
-                .unwrap(),
-                Address::from_str(
-                    v3_usdc_usd_addr,
-                )
-                .unwrap(),
-            )
-            .await;
-        if let AnyPool::V3(
-            mut pool,
-            contract,
-        ) = any_pool
+        println!("testing for usdc bsc v3 pool");
+        let mut any_pool = generator::create_v3(
+            Url::from_str(bnb_provider).unwrap(),
+            Address::from_str(v3_usdc_usd_addr).unwrap(),
+        )
+        .await;
+        if let Ok(AnyPool::V3(mut pool, contract)) =
+            any_pool
         {
             println!(
                 "v3 trade simulation: {:?}",
                 tick_math::trade(
-                    &mut pool,
+                    &pool,
                     U256::ONE << 64,
                     true
                 )
@@ -73,30 +63,19 @@ mod tests {
     }
     #[tokio::test]
     pub async fn v3_1() {
-        println!(
-            "testing for usdt bnb pool"
-        );
-        let mut any_pool =
-            generator::create_v3(
-                Url::from_str(
-                    bnb_provider,
-                )
-                .unwrap(),
-                Address::from_str(
-                    v3_usdt_bnb_addr,
-                )
-                .unwrap(),
-            )
-            .await;
-        if let AnyPool::V3(
-            mut pool,
-            contract,
-        ) = any_pool
+        println!("testing for usdt bnb pool");
+        let mut any_pool = generator::create_v3(
+            Url::from_str(bnb_provider).unwrap(),
+            Address::from_str(v3_usdt_bnb_addr).unwrap(),
+        )
+        .await;
+        if let Ok(AnyPool::V3(mut pool, contract)) =
+            any_pool
         {
             println!(
                 "v3 trade simulation: {:?}",
                 tick_math::trade(
-                    &mut pool,
+                    &pool,
                     U256::ONE << 64,
                     true
                 )
@@ -106,30 +85,19 @@ mod tests {
 
     #[tokio::test]
     pub async fn v3_2() {
-        println!(
-            "testing for cake usd v3 pool"
-        );
-        let mut any_pool =
-            generator::create_v3(
-                Url::from_str(
-                    bnb_provider,
-                )
-                .unwrap(),
-                Address::from_str(
-                    v3_cake_usd_addr,
-                )
-                .unwrap(),
-            )
-            .await;
-        if let AnyPool::V3(
-            mut pool,
-            contract,
-        ) = any_pool
+        println!("testing for cake usd v3 pool");
+        let mut any_pool = generator::create_v3(
+            Url::from_str(bnb_provider).unwrap(),
+            Address::from_str(v3_cake_usd_addr).unwrap(),
+        )
+        .await;
+        if let Ok(AnyPool::V3(mut pool, contract)) =
+            any_pool
         {
             println!(
                 "v3 trade simulation: {:?}",
                 tick_math::trade(
-                    &mut pool,
+                    &pool,
                     U256::ONE << 64,
                     true
                 )
@@ -146,33 +114,62 @@ mod tests {
     hooks: Address::ZERO,
 };
 
-        let mut any_pool =
-            generator::create_v4(
-                pool_key,
-                Url::from_str(
-                    bnb_provider,
-                )
-                .unwrap(),
-                Address::from_str(
-                    v4_addr,
-                )
-                .unwrap(),
-            )
-            .await;
-        if let AnyPool::V4(
-            mut pool,
-            contract,
-        ) = any_pool
+        let mut any_pool = generator::create_v4(
+            pool_key,
+            Url::from_str(bnb_provider).unwrap(),
+            Address::from_str(v4_addr).unwrap(),
+        )
+        .await;
+        if let Ok(AnyPool::V4(mut pool, contract)) =
+            any_pool
         {
             println!(
                 "v4 trade simulation: {:?}",
                 tick_math::trade(
-                    &mut pool,
+                    &pool,
                     U256::ONE << 64,
                     true
                 )
                 .ok()
             );
+        }
+    }
+
+    #[test]
+    fn test_price_to_tick() {
+        let range = 1..10;
+        for n in range {
+            println!(
+                "testing price: {}",
+                U256::from(4295128739u64) << n,
+            );
+            let tick = tick_math::tick_from_price(
+                U256::from(4295128739u64) << n,
+            )
+            .unwrap();
+        }
+    }
+    #[test]
+    fn test_tick_to_price() {
+        let min_tick = -10;
+        let max_tick = 10;
+
+        let mut p_tick = I24::try_from(min_tick).unwrap();
+        let mut prev_price =
+            tick_math::price_from_tick(p_tick).unwrap();
+
+        for tick in (min_tick + 1)..max_tick {
+            let c_tick = I24::try_from(tick).unwrap();
+            let mut cur_price =
+                tick_math::price_from_tick(c_tick).unwrap();
+
+            if (cur_price < prev_price) {
+                println!(
+                    "Non‑monotonic at tick {}: {} vs {}",
+                    tick, prev_price, cur_price
+                );
+                prev_price = cur_price;
+            }
         }
     }
 }
