@@ -22,90 +22,11 @@ use crate::{
     tick_math::{self, Tick},
     v3_state::{self, AnyPool, V3State},
 };
-pub type V3Contract = V3PoolInstance<
-    FillProvider<JoinedRecommendedFillers, RootProvider>,
->;
 pub type V4Contract = StateViewInstance<
     FillProvider<JoinedRecommendedFillers, RootProvider>,
 >;
 //unique stae view
-pub async fn create_v3(
-    provider_url: Url,
-    addr: Address,
-) -> Result<AnyPool, Error> {
-    let provider =
-        ProviderBuilder::new().connect_http(provider_url);
-    let contract = V3PoolInstance::new(
-        addr, provider,
-    );
-    let token_0 = contract
-        .token0()
-        .call()
-        .await?;
-    let token_1 = contract
-        .token1()
-        .call()
-        .await?;
-    let slot0 = contract
-        .slot0()
-        .call()
-        .await?;
-    let fee = contract
-        .fee()
-        .call()
-        .await?;
-    let tick_spacing = contract
-        .tickSpacing()
-        .call()
-        .await?;
-    let normalized_tick = tick_math::normalize_tick(
-        slot0.tick,
-        tick_spacing,
-    );
 
-    let liquidity = contract
-        .liquidity()
-        .call()
-        .await?;
-    let word_index = tick_math::word_index(normalized_tick);
-    let bitmap = contract
-        .tickBitmap(word_index)
-        .call()
-        .await?;
-    let mut hashmap = HashMap::<i16, U256>::new();
-    hashmap.insert(
-        word_index, bitmap,
-    );
-    let active_ticks = AnyPool::fetch_v3_word_ticks(
-        contract.clone(),
-        bitmap,
-        word_index,
-        tick_spacing,
-    )
-    .await;
-
-    println!(
-        "v3 price: {}",
-        slot0.sqrtPriceX96
-    );
-    let state = V3State {
-        address: addr,
-        token0: token_0,
-        token1: token_1,
-        fee: fee,
-        current_tick: slot0.tick,
-        active_ticks: active_ticks,
-        bitmap: hashmap,
-        tick_spacing,
-        liquidity: U256::from(liquidity),
-        x96price: U256::from(slot0.sqrtPriceX96),
-    };
-    let any_pool = AnyPool::V3(
-        state, contract,
-    );
-
-    Ok(any_pool)
-}
 pub async fn create_v4(
     pool_key: PoolKey,
     provider_url: Url,

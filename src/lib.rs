@@ -1,13 +1,13 @@
 use std::str::FromStr;
-
+mod any_pool;
+mod conncentrated_liquidity_pools;
+mod v3_pool;
+mod v4_pool;
+use crate::sol_types::{PoolKey, V3Pool};
 use alloy::primitives::{Address, aliases::U24};
-
-use crate::sol_types::PoolKey;
 mod err;
 mod generator;
 mod sol_types;
-mod tick_math;
-mod v3_state;
 //USDC BSC-USD pool
 const v3_usdc_usd_addr: &str =
     "0x2C3c320D49019D4f9A92352e947c7e5AcFE47D68";
