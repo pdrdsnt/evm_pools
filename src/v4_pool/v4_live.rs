@@ -1,21 +1,15 @@
 use std::collections::HashMap;
 
-use alloy::{
-    primitives::{Address, U256, aliases::I24, keccak256},
-    transports::http::reqwest::Url,
-};
+use alloy::primitives::{U256, aliases::I24};
 use alloy_provider::{
-    ProviderBuilder, RootProvider, fillers::FillProvider,
+    RootProvider, fillers::FillProvider,
     utils::JoinedRecommendedFillers,
 };
-use alloy_sol_types::SolValue;
 use futures::{StreamExt, stream::FuturesOrdered};
 
 use crate::{
-    any_pool::AnyPool,
-    sol_types::{
-        PoolId, PoolKey, StateView::StateViewInstance,
-    },
+    sol_types::{PoolId, StateView::StateViewInstance},
+    v3_base::{bitmap_math, states::Tick},
 };
 
 pub type V4Contract = StateViewInstance<
@@ -31,7 +25,7 @@ pub async fn fetch_v4_word_ticks(
     word_index: i16,
     tick_spacing: I24,
 ) -> Vec<Tick> {
-    let ticks = tick_math::extract_ticks_from_bitmap(
+    let ticks = bitmap_math::extract_ticks_from_bitmap(
         bitmap,
         I24::try_from(word_index).unwrap(),
         tick_spacing,
