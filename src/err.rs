@@ -1,8 +1,4 @@
-use alloy::primitives::{
-    U256, aliases::I24,
-};
-
-use crate::v3_state::TradeState;
+use crate::v3_base::states::TradeState;
 
 #[derive(Debug)]
 pub enum TickError {
@@ -20,6 +16,7 @@ pub enum TradeError {
     Tick(TickError),
     Math(MathError),
 }
+
 impl From<TickError> for TradeError {
     fn from(value: TickError) -> Self {
         TradeError::Tick(value)

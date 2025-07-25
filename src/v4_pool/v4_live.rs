@@ -16,8 +16,6 @@ use crate::{
     sol_types::{
         PoolId, PoolKey, StateView::StateViewInstance,
     },
-    tick_math::{self, Tick},
-    v3_pool::v3_state::V3State,
 };
 
 pub type V4Contract = StateViewInstance<
@@ -25,72 +23,6 @@ pub type V4Contract = StateViewInstance<
 >;
 //unique stae view
 
-pub async fn create_v4(
-    pool_key: PoolKey,
-    provider_url: Url,
-    contract_addr: Address,
-) -> Result<AnyPool, alloy_contract::Error> {
-    let provider =
-        ProviderBuilder::new().connect_http(provider_url);
-    let contract = StateViewInstance::new(
-        contract_addr,
-        provider,
-    );
-    let encoded_key = pool_key.abi_encode();
-    let pool_id = keccak256(encoded_key);
-    let slot0 = contract
-        .getSlot0(pool_id)
-        .call()
-        .await?;
-    let liquidity = contract
-        .getLiquidity(pool_id)
-        .call()
-        .await?;
-    let normalized_tick = tick_math::normalize_tick(
-        slot0.tick,
-        pool_key.tickSpacing,
-    );
-    let word_index = tick_math::word_index(normalized_tick);
-    let bitmap = contract
-        .getTickBitmap(
-            pool_id, word_index,
-        )
-        .call()
-        .await?;
-
-    let mut hashmap = HashMap::new();
-    hashmap.insert(
-        word_index, bitmap,
-    );
-    let active_ticks = fetch_v4_word_ticks(
-        &contract,
-        bitmap,
-        PoolId::from_underlying(pool_id),
-        word_index,
-        pool_key.tickSpacing,
-    )
-    .await;
-    println!(
-        "v4 loaded: {}",
-        slot0.sqrtPriceX96
-    );
-    let state = V3State {
-        address: contract_addr,
-        token0: pool_key.currency0,
-        token1: pool_key.currency1,
-        fee: pool_key.fee,
-        current_tick: slot0.tick,
-        active_ticks,
-        bitmap: hashmap,
-        tick_spacing: pool_key.tickSpacing,
-        liquidity: U256::from(liquidity),
-        x96price: U256::from(slot0.sqrtPriceX96),
-    };
-    let any_pool = AnyPool::V4(
-        state, contract,
-    );
-    Ok(any_pool)
-}
 pub async fn fetch_v4_word_ticks(
     contract: &V4Contract,
     bitmap: U256,
