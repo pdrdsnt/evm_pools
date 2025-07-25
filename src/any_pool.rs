@@ -25,7 +25,9 @@ use crate::{
     },
     v4_pool::{
         v4_key::V4Key,
-        v4_live::{V4Contract, fetch_v4_word_ticks},
+        v4_live::{
+            V4Contract, fetch_v4_word_ticks, get_v4_ticks,
+        },
     },
 };
 
@@ -43,6 +45,21 @@ pub enum AnyPool {
 }
 
 impl AnyPool {
+    pub async fn trade(&mut self, amount_in: U256) {
+        match self {
+            AnyPool::V3(
+                pool_state,
+                v3_key,
+                v3_pool_instance,
+            ) => todo!(),
+            AnyPool::V4(
+                pool_state,
+                pool_key,
+                state_view_instance,
+            ) => todo!(),
+        }
+    }
+
     pub async fn create_v4(
         pool_key: PoolKey,
         provider_url: Url,
@@ -189,73 +206,6 @@ impl AnyPool {
 
         Ok(any_pool)
     }
-    pub async fn get_v4_ticks(
-        contract: V4Contract,
-        ticks: Vec<I24>,
-        key: alloy::primitives::FixedBytes<32>,
-    ) -> (
-        Vec<Tick>,
-        Vec<usize>,
-    ) {
-        let mut fut_ordered = FuturesOrdered::new();
-
-        let mut active_ticks =
-            Vec::<Tick>::with_capacity(ticks.len());
-
-        let mut fail = Vec::new();
-
-        for tick in &ticks {
-            let c = contract.clone();
-            let tick = *tick;
-            fut_ordered.push_back(
-                async move {
-                    c.getTickInfo(key, tick)
-                        .call()
-                        .await
-                },
-            );
-        }
-
-        let mut tick_index = 0;
-        while let Some(result) = fut_ordered
-            .next()
-            .await
-        {
-            let current_tick = &ticks[tick_index];
-            tick_index += 1;
-
-            match result {
-                Ok(res) => {
-                    println!(
-                        "✅ tick={} → liquidity_net = {}",
-                        current_tick, res.liquidityNet
-                    );
-                    active_ticks.push(Tick {
-                        tick: *current_tick,
-                        liquidity_net: Some(
-                            res.liquidityNet,
-                        ),
-                    });
-                }
-                Err(e) => {
-                    println!(
-                        "❌ tick={} → error: {:?}",
-                        current_tick, e
-                    );
-                    fail.push(tick_index - 1);
-                    active_ticks.push(Tick {
-                        tick: *current_tick,
-                        liquidity_net: None,
-                    });
-                }
-            }
-        }
-
-        (
-            active_ticks,
-            fail,
-        )
-    }
     pub async fn get_ticks(
         &self,
         ticks: Vec<I24>,
@@ -274,7 +224,7 @@ impl AnyPool {
             }
             AnyPool::V4(_, key, contract) => {
                 let key = keccak256(key.abi_encode());
-                let (n, f) = Self::get_v4_ticks(
+                let (n, f) = get_v4_ticks(
                     contract.clone(),
                     ticks,
                     key,
