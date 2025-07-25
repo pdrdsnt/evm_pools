@@ -1,16 +1,15 @@
 use alloy::primitives::{U256, U512, aliases::U24};
 
 use crate::{
-    conncentrated_liquidity_pools::{
+    err::{MathError, TickError, TradeError},
+    v3_base::{
         states::{PoolState, TradeState},
         tick_math::{price_from_tick, tick_from_price},
         x96price_math::{
-            compute_price_from0, compute_price_from1,
+            compute_amount_possible, compute_price_from0,
+            compute_price_from1,
         },
     },
-    err::{MathError, TickError, TradeError},
-    v3_pool::v3_state::V3State,
-    v3_stuff::x96price_math::compute_amount_possible,
 };
 
 pub fn trade(
@@ -34,7 +33,7 @@ pub fn trade(
         tick: pool.current_tick,
     };
     let fee_amount = amount_in
-        .checked_mul(U256::from(pool.fee))
+        .checked_mul(U256::from(*fee))
         .ok_or(MathError::A(trade_state))?
         .checked_div(U256::from(1_000_000))
         .ok_or(MathError::A(trade_state))?;
@@ -46,7 +45,7 @@ pub fn trade(
         remaining
     );
 
-    trade_state.fee = fee_amount;
+    trade_state.fee_amount = fee_amount;
 
     // 2. Local state
     let mut total_out = U256::ZERO;

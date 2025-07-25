@@ -1,4 +1,3 @@
-use std::str::FromStr;
 mod any_pool;
 mod err;
 mod v3_base;
@@ -22,6 +21,8 @@ const V4_ADDR: &str =
 const BNB_PROVIDER: &str = "https://binance.llamarpc.com";
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use alloy::{
         primitives::{
             Address, U256,
