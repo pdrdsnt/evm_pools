@@ -6,16 +6,17 @@ use alloy::{
 };
 use alloy_provider::ProviderBuilder;
 use alloy_sol_types::SolValue;
-use futures::{StreamExt, stream::FuturesOrdered};
 
 use crate::{
+    err::TradeError,
     sol_types::{
         PoolId, PoolKey, StateView::StateViewInstance,
         V3Pool::V3PoolInstance,
     },
     v3_base::{
         bitmap_math,
-        states::{PoolState, Tick},
+        states::{PoolState, Tick, TradeState},
+        trade_math,
     },
     v3_pool::{
         v3_key::V3Key,
@@ -45,21 +46,92 @@ pub enum AnyPool {
 }
 
 impl AnyPool {
-    pub async fn trade(&mut self, amount_in: U256) {
-        match self {
+    pub async fn trade(
+        &mut self,
+        amount_in: U256,
+        from0: bool,
+    ) -> Result<TradeState, TradeError> {
+        //needed to fetch new words based on the data we have
+        let tick_spacing = match self {
+            AnyPool::V3(_, k, _) => k.tick_spacing,
+            AnyPool::V4(_, k, _) => k.tickSpacing,
+        };
+        let result = match self {
             AnyPool::V3(
                 pool_state,
                 v3_key,
                 v3_pool_instance,
-            ) => todo!(),
+            ) => trade_math::trade(
+                &pool_state,
+                &v3_key.fee,
+                amount_in,
+                from0,
+            ),
             AnyPool::V4(
                 pool_state,
                 pool_key,
                 state_view_instance,
-            ) => todo!(),
-        }
+            ) => trade_math::trade(
+                &pool_state,
+                &pool_key.fee,
+                amount_in,
+                from0,
+            ),
+        };
+
+        let trade_state = match result {
+            Ok(ts) => ts,
+            Err(err) => {
+                return self
+                    .handle_trade_error(
+                        err,
+                        tick_spacing,
+                    )
+                    .await;
+            }
+        };
+
+        Ok(trade_state)
     }
 
+    pub async fn handle_trade_error(
+        &self,
+        trade_error: TradeError,
+        tick_spacing: I24,
+    ) -> Result<TradeState, TradeError> {
+        match trade_error {
+            TradeError::Tick(tick_error) => {
+                match tick_error {
+                    crate::err::TickError::Overflow(
+                        trade_state,
+                    ) => {
+                        let normalized_tick =
+                            bitmap_math::normalize_tick(
+                                trade_state.tick,
+                                tick_spacing,
+                            );
+                        let a = self
+                            .get_word(
+                                bitmap_math::word_index(
+                                    normalized_tick,
+                                ),
+                            )
+                            .await;
+                        return a;
+                    }
+                    crate::err::TickError::Underflow(
+                        trade_state,
+                    ) => todo!(),
+                    crate::err::TickError::Unavailable(
+                        trade_state,
+                    ) => todo!(),
+                }
+            }
+            TradeError::Math(math_error) => {
+                return Err(math_error.into());
+            }
+        }
+    }
     pub async fn create_v4(
         pool_key: PoolKey,
         provider_url: Url,
@@ -205,6 +277,38 @@ impl AnyPool {
         );
 
         Ok(any_pool)
+    }
+    pub async fn get_word(
+        &self,
+        word_pos: i16,
+    ) -> Result<U256, alloy_contract::Error> {
+        let result = match self {
+            AnyPool::V3(
+                pool_state,
+                v3_key,
+                v3_pool_instance,
+            ) => {
+                v3_pool_instance
+                    .tickBitmap(word_pos)
+                    .call()
+                    .await
+            }
+
+            AnyPool::V4(
+                pool_state,
+                pool_key,
+                state_view_instance,
+            ) => {
+                state_view_instance
+                    .getTickBitmap(
+                        keccak256(pool_key.abi_encode()),
+                        word_pos,
+                    )
+                    .call()
+                    .await
+            }
+        };
+        result
     }
     pub async fn get_ticks(
         &self,
