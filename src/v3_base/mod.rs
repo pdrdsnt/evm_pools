@@ -1,3 +1,4 @@
+pub mod bitmap;
 pub mod bitmap_math;
 pub mod states;
 pub mod tick_math;

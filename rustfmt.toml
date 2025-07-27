@@ -1,9 +1,9 @@
 edition = "2021"
 use_small_heuristics = "Off"
-fn_call_width = 10 
+fn_call_width = 60 
 array_width = 0
 chain_width = 0
-max_width = 60
+max_width = 90
 struct_lit_width = 0
 struct_variant_width = 0
 where_single_line = false

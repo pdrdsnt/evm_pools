@@ -1,11 +1,7 @@
 use alloy::primitives::{U256, aliases::I24};
 
 /// Normalize a tick by tick spacing (division towards zero)
-pub fn normalize_tick(
-    current_tick: I24,
-
-    tick_spacing: I24,
-) -> I24 {
+pub fn normalize_tick(current_tick: I24, tick_spacing: I24) -> I24 {
     current_tick.div_euclid(tick_spacing)
 }
 
@@ -26,19 +22,18 @@ pub fn extract_ticks_from_bitmap(
     }
     for bit in 0..256 {
         if bitmap.bit(bit) {
-            let normalized = (word_idx
-                * I24::try_from(256).unwrap())
-                + I24::try_from(bit).unwrap();
+            let normalized =
+                (word_idx * I24::try_from(256).unwrap()) + I24::try_from(bit).unwrap();
             ticks.push(normalized * tick_spacing);
         }
     }
     ticks
 }
-
-pub fn next_left(
-    word: &U256,
-    start: &i16,
-) -> Option<usize> {
+pub fn get_pos_from_tick(tick: I24, tick_spacing: I24) -> i16 {
+    let normalized_tick = normalize_tick(tick, tick_spacing);
+    word_index(normalized_tick)
+}
+pub fn next_left(word: &U256, start: &i16) -> Option<usize> {
     // clamp start to valid range 0..=255
     let mut idx = *start
         .max(&0_i16)
@@ -53,10 +48,7 @@ pub fn next_left(
     None
 }
 
-pub fn next_right(
-    word: &U256,
-    start: &i16,
-) -> Option<usize> {
+pub fn next_right(word: &U256, start: &i16) -> Option<usize> {
     // clamp start to valid range 0..=255
     let mut idx = *start
         .max(&0_i16)
@@ -69,23 +61,4 @@ pub fn next_right(
         }
     }
     None
-}
-
-/// Given a map of word_index -> bitmap, produce all initialized ticks
-pub fn collect_ticks_from_map(
-    word_map: &std::collections::HashMap<I24, U256>,
-    tick_spacing: I24,
-) -> Vec<I24> {
-    let mut ticks = Vec::new();
-    for (&word_idx, &bitmap) in word_map.iter() {
-        ticks.extend(
-            extract_ticks_from_bitmap(
-                bitmap,
-                word_idx,
-                tick_spacing,
-            ),
-        );
-    }
-    ticks.sort_unstable();
-    ticks
 }

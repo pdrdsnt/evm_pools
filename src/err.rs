@@ -1,4 +1,8 @@
 use crate::v3_base::states::TradeState;
+#[derive(Debug, Clone)]
+pub enum WordError {
+    NotTried,
+}
 
 #[derive(Debug)]
 pub enum TickError {
