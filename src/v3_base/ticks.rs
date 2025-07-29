@@ -18,13 +18,11 @@ impl Ticks {
         }
     }
 
-    //this function needs a lot of garantees on both vectors
     pub fn insert_ticks(&mut self, mut ticks: Vec<Tick>) {
         if ticks.len() == 0 {
             return;
         }
-        //merge sort is better for this
-        //assure the array is usable
+
         ticks.sort_by_key(|x| x.tick);
         ticks.dedup_by_key(|x| x.tick);
 
@@ -32,9 +30,10 @@ impl Ticks {
         let mut new_idx = 0;
         let mut self_idx = 0;
 
-        while new_idx < ticks.len() || self_idx < self.ticks.len() {
+        while new_idx < ticks.len() && self_idx < self.ticks.len() {
             let stick = self.ticks[self_idx].tick;
             let ntick = ticks[new_idx].tick;
+
             if stick > ntick {
                 all_ticks.push(self.ticks[self_idx]);
                 self_idx += 1;
@@ -42,11 +41,15 @@ impl Ticks {
                 all_ticks.push(ticks[new_idx]);
                 new_idx += 1;
             } else {
-                //update or ignore if they are equal
                 all_ticks.push(ticks[new_idx]);
                 self_idx += 1;
                 new_idx += 1;
             }
+        }
+        if new_idx >= ticks.len() {
+            all_ticks.extend_from_slice(&self.ticks.split_at(self_idx).1);
+        } else {
+            all_ticks.extend_from_slice(ticks.split_at(new_idx).1);
         }
         self.ticks = all_ticks;
     }
