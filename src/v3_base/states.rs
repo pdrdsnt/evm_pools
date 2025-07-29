@@ -5,7 +5,7 @@ use alloy::primitives::{
     aliases::{I24, U24},
 };
 
-use crate::v3_base::bitmap::BitMap;
+use crate::v3_base::{bitmap::BitMap, ticks::Ticks};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tick {
@@ -37,7 +37,7 @@ pub struct TradeState {
 
 pub struct PoolState {
     pub current_tick: I24,
-    pub active_ticks: Vec<Tick>,
+    pub ticks: Ticks,
     pub bitmap: BitMap,
     pub liquidity: U256,
     pub x96price: U256,
