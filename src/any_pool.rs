@@ -54,9 +54,7 @@ impl AnyPool {
         let trade_state = match result {
             Ok(ts) => ts,
             Err(err) => {
-                return self
-                    .handle_trade_error(err, tick_spacing)
-                    .await;
+                return self.handle_trade_error(err, tick_spacing).await;
             }
         };
 
@@ -91,19 +89,15 @@ impl AnyPool {
                                     word_idx,
                                     tick_spacing,
                                 );
-                                pool_state
-                                    .bitmap
-                                    .insert(
-                                        bitmap_math::get_pos_from_tick(
-                                            trade_state.tick + I24::ONE,
-                                            tick_spacing,
-                                        ),
-                                        bitmap,
-                                    );
+                                pool_state.bitmap.insert(
+                                    bitmap_math::get_pos_from_tick(
+                                        trade_state.tick + I24::ONE,
+                                        tick_spacing,
+                                    ),
+                                    bitmap,
+                                );
 
-                                let new_ticks = self
-                                    .get_ticks(ticks)
-                                    .await;
+                                let new_ticks = self.get_ticks(ticks).await;
                                 self.insert_ticks(new_ticks);
                                 /////////////////////////////////////////////////////////
                                 return Err(MathError::A(trade_state).into());
@@ -130,14 +124,8 @@ impl AnyPool {
         let contract = StateViewInstance::new(contract_addr, provider);
         let encoded_key = pool_key.abi_encode();
         let pool_id = keccak256(encoded_key);
-        let slot0 = contract
-            .getSlot0(pool_id)
-            .call()
-            .await?;
-        let liquidity = contract
-            .getLiquidity(pool_id)
-            .call()
-            .await?;
+        let slot0 = contract.getSlot0(pool_id).call().await?;
+        let liquidity = contract.getLiquidity(pool_id).call().await?;
         let normalized_tick =
             bitmap_math::normalize_tick(slot0.tick, pool_key.tickSpacing);
         let word_index = bitmap_math::word_index(normalized_tick);
@@ -173,37 +161,16 @@ impl AnyPool {
     ) -> Result<AnyPool, alloy_contract::Error> {
         let provider = ProviderBuilder::new().connect_http(provider_url);
         let contract = V3PoolInstance::new(addr, provider);
-        let token_0 = contract
-            .token0()
-            .call()
-            .await?;
-        let token_1 = contract
-            .token1()
-            .call()
-            .await?;
-        let slot0 = contract
-            .slot0()
-            .call()
-            .await?;
-        let fee = contract
-            .fee()
-            .call()
-            .await?;
-        let tick_spacing = contract
-            .tickSpacing()
-            .call()
-            .await?;
+        let token_0 = contract.token0().call().await?;
+        let token_1 = contract.token1().call().await?;
+        let slot0 = contract.slot0().call().await?;
+        let fee = contract.fee().call().await?;
+        let tick_spacing = contract.tickSpacing().call().await?;
         let normalized_tick = bitmap_math::normalize_tick(slot0.tick, tick_spacing);
 
-        let liquidity = contract
-            .liquidity()
-            .call()
-            .await?;
+        let liquidity = contract.liquidity().call().await?;
         let word_index = bitmap_math::word_index(normalized_tick);
-        let bitmap = contract
-            .tickBitmap(word_index)
-            .call()
-            .await?;
+        let bitmap = contract.tickBitmap(word_index).call().await?;
         let active_ticks = fetch_v3_word_ticks(
             contract.clone(),
             bitmap,
@@ -243,10 +210,7 @@ impl AnyPool {
     pub async fn get_word(&self, word_pos: i16) -> Result<U256, alloy_contract::Error> {
         let result = match self {
             AnyPool::V3(pool_state, v3_key, v3_pool_instance) => {
-                v3_pool_instance
-                    .tickBitmap(word_pos)
-                    .call()
-                    .await
+                v3_pool_instance.tickBitmap(word_pos).call().await
             }
 
             AnyPool::V4(pool_state, pool_key, state_view_instance) => {

@@ -53,4 +53,10 @@ impl Ticks {
         }
         self.ticks = all_ticks;
     }
+    pub fn len(&self) -> usize {
+        self.ticks.len()
+    }
+    pub fn get(&self, index: usize) -> Option<&Tick> {
+        self.ticks.get(index)
+    }
 }
