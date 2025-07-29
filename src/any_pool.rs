@@ -14,7 +14,9 @@ use crate::{
         bitmap::BitMap,
         bitmap_math,
         states::{PoolState, Tick, TradeState},
-        tick_math, trade_math,
+        tick_math,
+        ticks::Ticks,
+        trade_math,
     },
     v3_pool::{
         v3_key::V3Key,
@@ -43,10 +45,10 @@ impl AnyPool {
             AnyPool::V4(_, k, _) => k.tickSpacing,
         };
         let result = match self {
-            AnyPool::V3(pool_state, v3_key, v3_pool_instance) => {
+            AnyPool::V3(pool_state, v3_key, _) => {
                 trade_math::trade(&pool_state, &v3_key.fee, amount_in, from0)
             }
-            AnyPool::V4(pool_state, pool_key, state_view_instance) => {
+            AnyPool::V4(pool_state, pool_key, _) => {
                 trade_math::trade(&pool_state, &pool_key.fee, amount_in, from0)
             }
         };
@@ -76,7 +78,7 @@ impl AnyPool {
                         .await;
                     match a {
                         Ok(bitmap) => match self {
-                            AnyPool::V3(mut pool_state, _, _) => {
+                            AnyPool::V3(pool_state, _, _) => {
                                 let word_idx =
                                     I24::try_from(bitmap_math::get_pos_from_tick(
                                         trade_state.tick + I24::ONE,
@@ -97,12 +99,12 @@ impl AnyPool {
                                     bitmap,
                                 );
 
-                                let new_ticks = self.get_ticks(ticks).await;
+                                let new_ticks = self.get_ticks(ticks).await.0;
                                 self.insert_ticks(new_ticks);
                                 /////////////////////////////////////////////////////////
                                 return Err(MathError::A(trade_state).into());
                             }
-                            AnyPool::V4(mut pool_state, _, _) => todo!(),
+                            AnyPool::V4(pool_state, _, _) => todo!(),
                         },
                         Err(err) => todo!(),
                     }
@@ -146,7 +148,7 @@ impl AnyPool {
 
         let state = PoolState {
             current_tick: slot0.tick,
-            active_ticks: active_ticks,
+            ticks: Ticks::new(active_ticks),
             bitmap: BitMap::new(pool_key.tickSpacing, vec![(word_index, bitmap)]),
             liquidity: U256::from(liquidity),
             x96price: U256::from(slot0.sqrtPriceX96),
@@ -191,7 +193,7 @@ impl AnyPool {
         };
         let state = PoolState {
             current_tick: slot0.tick,
-            active_ticks: active_ticks,
+            ticks: Ticks::new(active_ticks),
             bitmap: BitMap::new(tick_spacing, vec![(word_index, bitmap)]),
 
             liquidity: U256::from(liquidity),
@@ -203,17 +205,17 @@ impl AnyPool {
     }
     pub fn insert_ticks(&mut self, new_ticks: Vec<Tick>) {
         match self {
-            AnyPool::V3(pool_state, v3_key, v3_pool_instance) => todo!(),
-            AnyPool::V4(pool_state, pool_key, state_view_instance) => todo!(),
+            AnyPool::V3(pool_state, _, _) => pool_state.ticks.insert_ticks(new_ticks),
+            AnyPool::V4(pool_state, _, _) => pool_state.ticks.insert_ticks(new_ticks),
         }
     }
     pub async fn get_word(&self, word_pos: i16) -> Result<U256, alloy_contract::Error> {
         let result = match self {
-            AnyPool::V3(pool_state, v3_key, v3_pool_instance) => {
+            AnyPool::V3(_, _, v3_pool_instance) => {
                 v3_pool_instance.tickBitmap(word_pos).call().await
             }
 
-            AnyPool::V4(pool_state, pool_key, state_view_instance) => {
+            AnyPool::V4(_, pool_key, state_view_instance) => {
                 state_view_instance
                     .getTickBitmap(keccak256(pool_key.abi_encode()), word_pos)
                     .call()

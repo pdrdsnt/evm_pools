@@ -1,11 +1,19 @@
 use alloy::primitives::aliases::I24;
 
-use crate::v3_base::states::Tick;
+use crate::v3_base::states::{Tick, TradeState};
 
 pub struct Ticks {
     ticks: Vec<Tick>,
 }
 impl Ticks {
+    pub fn new(mut ticks: Vec<Tick>) -> Ticks {
+        ticks.sort_by_key(|x| x.tick);
+        ticks.dedup_by_key(|x| x.tick);
+
+        Ticks {
+            ticks,
+        }
+    }
     pub fn get_tick_index(&self, tick: I24) -> Result<usize, usize> {
         let result = self.ticks.binary_search_by_key(&tick, |t| t.tick);
         result
@@ -60,3 +68,5 @@ impl Ticks {
         self.ticks.get(index)
     }
 }
+
+pub fn trade_step(trade_state: TradeState) {}

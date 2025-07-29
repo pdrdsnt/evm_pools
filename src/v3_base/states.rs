@@ -33,8 +33,8 @@ pub struct TradeState {
     pub x96price: U256,
     pub tick: I24,
     pub remaining: U256,
+    pub from0: bool,
 }
-
 pub struct PoolState {
     pub current_tick: I24,
     pub ticks: Ticks,
