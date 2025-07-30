@@ -68,5 +68,3 @@ impl Ticks {
         self.ticks.get(index)
     }
 }
-
-pub fn trade_step(trade_state: TradeState) {}

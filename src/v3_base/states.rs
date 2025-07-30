@@ -47,6 +47,13 @@ pub struct TradeStep {
     pub delta: U256,
 }
 
+pub enum TradeStateMachine {
+    Start(TradeState),
+    StepStart(TradeState),
+    Step(TradeState),
+    StepEnd(TradeState),
+    End(TradeState),
+}
 pub struct PoolState {
     pub current_tick: I24,
     pub ticks: Ticks,
