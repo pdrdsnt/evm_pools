@@ -15,15 +15,29 @@ use crate::{
     },
 };
 
+pub fn retry(trade_state: TradeState, ticks: &Ticks) -> Result<TradeState, TradeError> {
+    trade_loop(trade_state, ticks)
+}
+
 pub fn trade(
     pool: &PoolState,
     fee: &U24,
     amount_in: U256,
     from0: bool,
 ) -> Result<TradeState, TradeError> {
-    let mut trade_state = trade_start(pool, fee, amount_in, from0)?;
+    let trade_state = trade_start(pool, fee, amount_in, from0)?;
+    trade_loop(trade_state, &pool.ticks)?;
+
+    // build Trade
+    Ok(trade_state)
+}
+
+pub fn trade_loop(
+    mut trade_state: TradeState,
+    ticks: &Ticks,
+) -> Result<TradeState, TradeError> {
     while trade_state.remaining > U256::ZERO {
-        step_start(&mut trade_state, &pool.ticks)?;
+        step_start(&mut trade_state, ticks)?;
         if trade_state.remaining < trade_state.step.amount_possible {
             handle_non_crossing_step(&mut trade_state)?;
             break;
@@ -33,8 +47,6 @@ pub fn trade(
 
         update_state_for_next_step(&mut trade_state)?;
     }
-
-    // build Trade
     Ok(trade_state)
 }
 
@@ -202,7 +214,6 @@ pub fn step_start(trade_state: &mut TradeState, ticks: &Ticks) -> Result<(), Tra
 }
 
 //////////////////////////////
-///no recoverable errors
 pub fn trade_start(
     pool: &PoolState,
     fee: &U24,
@@ -239,7 +250,6 @@ pub fn trade_start(
     Ok(trade_state)
 }
 ////////////////////////////////////
-///no recoverable errors///////////
 pub fn get_crossing_delta(trade_state: &mut TradeState) -> Result<(), TradeError> {
     // cross entire tick
     if trade_state.from0 {

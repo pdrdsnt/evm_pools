@@ -16,7 +16,7 @@ use crate::{
         states::{PoolState, Tick, TradeState},
         tick_math,
         ticks::Ticks,
-        trade_math,
+        trade_math::{self, retry},
     },
     v3_pool::{
         v3_key::V3Key,
@@ -62,30 +62,34 @@ impl AnyPool {
 
         Ok(trade_state)
     }
+    pub async fn get_next_word_ticks(trade_state: &TradeState) {}
 
     pub async fn handle_trade_error(
         &mut self,
         trade_error: TradeError,
         tick_spacing: I24,
     ) -> Result<TradeState, TradeError> {
+        let mut ticks_to_fetch: Vec<I24> = Vec::new();
+        let mut trade_state = Option::None;
         match trade_error {
             TradeError::Tick(tick_error) => match tick_error {
                 crate::err::TickError::Overflow(trade_state) => {
-                    let normalized_tick =
-                        bitmap_math::normalize_tick(trade_state.tick, tick_spacing);
-                    let a = self
+                    let normalized_tick = bitmap_math::normalize_tick(
+                        trade_state.step.next_tick.tick,
+                        tick_spacing,
+                    );
+                    let word_idx = I24::try_from(bitmap_math::get_pos_from_tick(
+                        trade_state.step.next_tick.tick,
+                        tick_spacing,
+                    ))
+                    .expect("error on handling overflow trading error");
+
+                    let word_bitmap = self
                         .get_word(bitmap_math::word_index(normalized_tick))
                         .await;
-                    match a {
+                    match word_bitmap {
                         Ok(bitmap) => match self {
                             AnyPool::V3(pool_state, _, _) => {
-                                let word_idx =
-                                    I24::try_from(bitmap_math::get_pos_from_tick(
-                                        trade_state.tick + I24::ONE,
-                                        tick_spacing,
-                                    ))
-                                    .expect("error on handling overflow trading error");
-
                                 let ticks = bitmap_math::extract_ticks_from_bitmap(
                                     bitmap,
                                     word_idx,
@@ -99,10 +103,9 @@ impl AnyPool {
                                     bitmap,
                                 );
 
-                                let new_ticks = self.get_ticks(ticks).await.0;
+                                let new_ticks = self.fetch_ticks(ticks).await.0;
                                 self.insert_ticks(new_ticks);
                                 /////////////////////////////////////////////////////////
-                                return Err(MathError::A(trade_state).into());
                             }
                             AnyPool::V4(pool_state, _, _) => todo!(),
                         },
@@ -116,6 +119,7 @@ impl AnyPool {
                 return Err(math_error.into());
             }
         }
+        return trade_math::retry(trade_state.unwrap(), self.get_ticks());
     }
     pub async fn create_v4(
         pool_key: PoolKey,
@@ -224,7 +228,13 @@ impl AnyPool {
         };
         result
     }
-    pub async fn get_ticks(&self, ticks: Vec<I24>) -> (Vec<Tick>, Vec<usize>) {
+    pub fn get_ticks(&self) -> &Ticks {
+        match self {
+            AnyPool::V3(pool_state, _, _) => return &pool_state.ticks,
+            AnyPool::V4(pool_state, _, _) => return &pool_state.ticks,
+        }
+    }
+    pub async fn fetch_ticks(&self, ticks: Vec<I24>) -> (Vec<Tick>, Vec<usize>) {
         match self {
             AnyPool::V3(_, _, contract) => {
                 let (n, f) = get_v3_ticks(contract.clone(), ticks).await;
