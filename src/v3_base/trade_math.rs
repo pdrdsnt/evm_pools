@@ -16,6 +16,7 @@ use crate::{
 };
 
 pub fn retry(trade_state: TradeState, ticks: &Ticks) -> Result<TradeState, TradeError> {
+    println!("retrying trade");
     trade_loop(trade_state, ticks)
 }
 
@@ -31,7 +32,134 @@ pub fn trade(
     // build Trade
     Ok(trade_state)
 }
+//////////////////////////////
+pub fn trade_start(
+    pool: &PoolState,
+    fee: &U24,
+    amount_in: U256,
+    from0: bool,
+) -> Result<TradeState, TradeError> {
+    let mut trade_state = TradeState {
+        fee_amount: U256::ZERO,
+        remaining: amount_in.clone(),
+        amount_out: U256::ZERO,
+        x96price: pool.x96price,
+        liquidity: pool.liquidity,
+        amount_in: amount_in,
+        tick: pool.current_tick,
+        from0: from0,
+        step: TradeStep::default(),
+    };
+    let fee_amount = amount_in
+        .checked_mul(U256::from(*fee))
+        .ok_or(MathError::A(trade_state))?
+        .checked_div(U256::from(1_000_000))
+        .ok_or(MathError::A(trade_state))?;
+    trade_state.remaining = amount_in
+        .checked_sub(fee_amount)
+        .ok_or(MathError::A(trade_state))?;
 
+    trade_state.fee_amount = fee_amount;
+    trade_state.x96price = pool.x96price;
+    trade_state.tick = tick_from_price(pool.x96price).ok_or(MathError::A(trade_state))?;
+    trade_state.liquidity = pool.liquidity;
+    match pool.ticks.get_tick(trade_state.tick) {
+        Ok(_) => return Ok(trade_state),
+        Err(_) => {
+            trade_state.step.next_tick.tick = trade_state.tick; //just to work with the error
+            //recovery idk
+            //if modifing this will cause problem
+            return Err(TickError::Overflow(trade_state).into());
+        }
+    }
+}
+pub fn step_start(trade_state: &mut TradeState, ticks: &Ticks) -> Result<(), TradeError> {
+    let mut new_step = TradeStep::default(); //this is right? 
+    trade_state.step.next_tick_index = match ticks.get_tick_index(trade_state.tick) {
+        Ok(i) => {
+            if trade_state.from0 {
+                if i + 1 >= ticks.len() {
+                    return Err(TickError::Overflow(*trade_state).into());
+                } // No ticks above
+                i + 1
+            } else {
+                if i == 0 {
+                    return Err(TickError::Underflow(*trade_state).into());
+                } // No ticks below
+                i - 1
+            }
+        }
+        Err(i) => {
+            if trade_state.from0 {
+                if i >= ticks.len() {
+                    return Err(TickError::Overflow(*trade_state).into());
+                } // No ticks above
+                i
+            } else {
+                if i == 0 {
+                    return Err(TickError::Underflow(*trade_state).into());
+                } // No ticks below
+                i - 1
+            }
+        }
+    };
+
+    trade_state.step.next_tick = *ticks
+        .get(trade_state.step.next_tick_index)
+        .expect("checked above");
+
+    if trade_state.step.next_tick.liquidity_net.is_none() {
+        return Err(TickError::Unavailable(*trade_state).into());
+    }
+    // calculate the next tick’s price
+    trade_state.step.next_price = price_from_tick(trade_state.step.next_tick.tick)
+        .ok_or(MathError::A(*trade_state))?;
+
+    // compute max amount possible to cross this tick
+    trade_state.step.amount_possible = compute_amount_possible(
+        trade_state.from0,
+        &trade_state.liquidity,
+        &trade_state.x96price,
+        &trade_state.step.next_price,
+    )
+    .ok_or(MathError::A(*trade_state))?;
+
+    Ok(())
+}
+
+////////////////////////////////////
+pub fn get_crossing_delta(trade_state: &mut TradeState) -> Result<(), TradeError> {
+    // cross entire tick
+    if trade_state.from0 {
+        trade_state.step.delta = trade_state
+            .liquidity
+            .checked_mul(
+                trade_state
+                    .step
+                    .next_price
+                    .checked_sub(trade_state.x96price)
+                    .ok_or(MathError::A(*trade_state))?,
+            )
+            .ok_or(MathError::A(*trade_state))?
+            .checked_div(U256::from(1u128 << 96))
+            .ok_or(MathError::A(*trade_state))?;
+    } else {
+        let num = trade_state
+            .liquidity
+            .checked_mul(
+                trade_state
+                    .x96price
+                    .checked_sub(trade_state.step.next_price)
+                    .ok_or(MathError::A(*trade_state))?,
+            )
+            .ok_or(MathError::A(*trade_state))?;
+
+        trade_state.step.delta = num
+            .checked_div(U256::from(1u128 << 96))
+            .ok_or(MathError::A(*trade_state))?;
+    }
+    Ok(())
+}
 pub fn trade_loop(
     mut trade_state: TradeState,
     ticks: &Ticks,
@@ -154,136 +282,5 @@ pub fn handle_non_crossing_step(trade_state: &mut TradeState) -> Result<(), Trad
     trade_state.remaining = U256::ZERO;
     trade_state.x96price = U256::from(new_price);
 
-    Ok(())
-}
-
-//////////////////////////////////////////
-///recoverable
-pub fn step_start(trade_state: &mut TradeState, ticks: &Ticks) -> Result<(), TradeError> {
-    let mut new_step = TradeStep::default(); //this is right? 
-    trade_state.step.next_tick_index = match ticks.get_tick_index(trade_state.tick) {
-        Ok(i) => {
-            if trade_state.from0 {
-                if i + 1 >= ticks.len() {
-                    return Err(TickError::Overflow(*trade_state).into());
-                } // No ticks above
-                i + 1
-            } else {
-                if i == 0 {
-                    return Err(TickError::Underflow(*trade_state).into());
-                } // No ticks below
-                i - 1
-            }
-        }
-        Err(i) => {
-            if trade_state.from0 {
-                if i >= ticks.len() {
-                    return Err(TickError::Overflow(*trade_state).into());
-                } // No ticks above
-                i
-            } else {
-                if i == 0 {
-                    return Err(TickError::Underflow(*trade_state).into());
-                } // No ticks below
-                i - 1
-            }
-        }
-    };
-
-    trade_state.step.next_tick = *ticks
-        .get(trade_state.step.next_tick_index)
-        .expect("checked above");
-
-    if trade_state.step.next_tick.liquidity_net.is_none() {
-        return Err(TickError::Unavailable(*trade_state).into());
-    }
-    // calculate the next tick’s price
-    trade_state.step.next_price = price_from_tick(trade_state.step.next_tick.tick)
-        .ok_or(MathError::A(*trade_state))?;
-
-    // compute max amount possible to cross this tick
-    trade_state.step.amount_possible = compute_amount_possible(
-        trade_state.from0,
-        &trade_state.liquidity,
-        &trade_state.x96price,
-        &trade_state.step.next_price,
-    )
-    .ok_or(MathError::A(*trade_state))?;
-
-    Ok(())
-}
-
-//////////////////////////////
-pub fn trade_start(
-    pool: &PoolState,
-    fee: &U24,
-    amount_in: U256,
-    from0: bool,
-) -> Result<TradeState, TradeError> {
-    let mut trade_state = TradeState {
-        fee_amount: U256::ZERO,
-        remaining: amount_in.clone(),
-        amount_out: U256::ZERO,
-        x96price: pool.x96price,
-        liquidity: pool.liquidity,
-        amount_in: amount_in,
-        tick: pool.current_tick,
-        from0: from0,
-        step: TradeStep::default(),
-    };
-    let fee_amount = amount_in
-        .checked_mul(U256::from(*fee))
-        .ok_or(MathError::A(trade_state))?
-        .checked_div(U256::from(1_000_000))
-        .ok_or(MathError::A(trade_state))?;
-    trade_state.remaining = amount_in
-        .checked_sub(fee_amount)
-        .ok_or(MathError::A(trade_state))?;
-
-    trade_state.fee_amount = fee_amount;
-    trade_state.x96price = pool.x96price;
-    trade_state.tick = tick_from_price(pool.x96price).ok_or(MathError::A(trade_state))?;
-    trade_state.liquidity = pool.liquidity;
-    match pool.ticks.get_tick(trade_state.tick) {
-        Ok(_) => return Ok(trade_state),
-        Err(_) => {
-            trade_state.step.next_tick.tick = trade_state.tick; //just to work with the error
-            //recovery idk
-            //if modifing this will cause problem
-            return Err(TickError::Overflow(trade_state).into());
-        }
-    }
-}
-////////////////////////////////////
-pub fn get_crossing_delta(trade_state: &mut TradeState) -> Result<(), TradeError> {
-    // cross entire tick
-    if trade_state.from0 {
-        trade_state.step.delta = trade_state
-            .liquidity
-            .checked_mul(
-                trade_state
-                    .step
-                    .next_price
-                    .checked_sub(trade_state.x96price)
-                    .ok_or(MathError::A(*trade_state))?,
-            )
-            .ok_or(MathError::A(*trade_state))?
-            .checked_div(U256::from(1u128 << 96))
-            .ok_or(MathError::A(*trade_state))?;
-    } else {
-        let num = trade_state
-            .liquidity
-            .checked_mul(
-                trade_state
-                    .x96price
-                    .checked_sub(trade_state.step.next_price)
-                    .ok_or(MathError::A(*trade_state))?,
-            )
-            .ok_or(MathError::A(*trade_state))?;
-
-        trade_state.step.delta = num
-            .checked_div(U256::from(1u128 << 96))
-            .ok_or(MathError::A(*trade_state))?;
-    }
     Ok(())
 }

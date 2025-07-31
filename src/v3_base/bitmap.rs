@@ -50,6 +50,9 @@ impl BitMap {
         self.bitmap[Self::pos_to_idx(pos, self.tick_spacing)] = Ok(word);
     }
     pub fn pos_to_idx(word_pos: i16, tick_spacing: I24) -> usize {
-        (word_pos + i16::max_value()) as usize / tick_spacing.as_usize()
+        println!("word pos: {} , tick spacing: {}", word_pos, tick_spacing);
+        (word_pos as isize
+            + (i16::max_value() as isize) as isize / tick_spacing.as_isize())
+            as usize
     }
 }

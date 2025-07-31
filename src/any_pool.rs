@@ -74,11 +74,13 @@ impl AnyPool {
         match trade_error {
             TradeError::Tick(tick_error) => match tick_error {
                 crate::err::TickError::Overflow(trade_state) => {
+                    println!("overflow");
                     let new_word_pos = bitmap_math::get_pos_from_tick(
                         trade_state.step.next_tick.tick,
                         tick_spacing,
                     );
-                    self.fetch_word(new_word_pos);
+                    self.fetch_word_and_insert_ticks(new_word_pos)
+                        .await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Underflow(trade_state) => {
@@ -86,7 +88,8 @@ impl AnyPool {
                         trade_state.step.next_tick.tick,
                         tick_spacing,
                     );
-                    self.fetch_word(new_word_pos);
+                    self.fetch_word_and_insert_ticks(new_word_pos)
+                        .await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Unavailable(trade_state) => {
@@ -97,12 +100,12 @@ impl AnyPool {
                     state = Some(trade_state);
                 }
             },
+            //
             TradeError::Math(math_error) => {
                 return Err(math_error.into());
             }
             TradeError::Fetch(err) => return Err(TradeError::Fetch(err)),
         }
-        self.insert_ticks(ticks);
         return trade_math::retry(state.unwrap(), self.get_ticks());
     }
 
@@ -183,7 +186,7 @@ impl AnyPool {
         }
     }
 
-    pub async fn fetch_word(
+    pub async fn fetch_word_and_insert_ticks(
         &mut self,
         word_pos: i16,
     ) -> Result<(), alloy_contract::Error> {
@@ -216,7 +219,6 @@ impl AnyPool {
         }
         Ok(())
     }
-    pub async fn fetch_word_ticks() {}
     pub fn get_ticks(&self) -> &Ticks {
         match self {
             AnyPool::V3(pool_state, _, _) => return &pool_state.ticks,
