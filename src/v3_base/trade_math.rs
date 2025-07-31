@@ -241,13 +241,18 @@ pub fn trade_start(
         .ok_or(MathError::A(trade_state))?;
 
     trade_state.fee_amount = fee_amount;
-
     trade_state.x96price = pool.x96price;
-
     trade_state.tick = tick_from_price(pool.x96price).ok_or(MathError::A(trade_state))?;
-
     trade_state.liquidity = pool.liquidity;
-    Ok(trade_state)
+    match pool.ticks.get_tick(trade_state.tick) {
+        Ok(_) => return Ok(trade_state),
+        Err(_) => {
+            trade_state.step.next_tick.tick = trade_state.tick; //just to work with the error
+            //recovery idk
+            //if modifing this will cause problem
+            return Err(TickError::Overflow(trade_state).into());
+        }
+    }
 }
 ////////////////////////////////////
 pub fn get_crossing_delta(trade_state: &mut TradeState) -> Result<(), TradeError> {

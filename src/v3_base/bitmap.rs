@@ -12,9 +12,12 @@ pub struct BitMap {
 
 impl BitMap {
     pub fn new(tick_spacing: I24, words: Vec<(i16, U256)>) -> Self {
-        let total_words = (i16::MAX as usize * 2 + 1) / tick_spacing.as_usize();
+        println!("tick spacing {}:", tick_spacing);
+        let total_words = (65536_i64 + tick_spacing.as_i64())
+            .checked_div(tick_spacing.as_i64())
+            .expect("problem dividing full bitmap range by tick spacing ");
 
-        let mut bm = Vec::with_capacity(total_words);
+        let mut bm = Vec::with_capacity(total_words as usize);
 
         for _ in 0..total_words {
             bm.push(Err(WordError::NotTried));
@@ -32,8 +35,7 @@ impl BitMap {
     pub fn get_word_from_pos(&self, word_pos: i16) -> Option<&Result<U256, WordError>> {
         let index = Self::pos_to_idx(word_pos, self.tick_spacing);
 
-        self.bitmap
-            .get(index)
+        self.bitmap.get(index)
     }
     pub fn get_word_from_tick(
         &self,

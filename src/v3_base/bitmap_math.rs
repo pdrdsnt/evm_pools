@@ -10,21 +10,21 @@ pub fn word_index(normalized_tick: I24) -> i16 {
     let quotient = normalized_tick.div_euclid(divisor);
     quotient.as_i16() // Safe: quotient ∈ [-32,768, 32,767]
 }
+
 /// Extract initialized tick values from a single bitmap word
 pub fn extract_ticks_from_bitmap(
     bitmap: U256,
-    word_idx: I24,
+    word_idx: i16,
     tick_spacing: I24,
 ) -> Vec<I24> {
     let mut ticks = Vec::new();
     if bitmap.is_zero() {
         return ticks;
     }
-    for bit in 0..256 {
-        if bitmap.bit(bit) {
-            let normalized =
-                (word_idx * I24::try_from(256).unwrap()) + I24::try_from(bit).unwrap();
-            ticks.push(normalized * tick_spacing);
+    for bit in 0..256_i16 {
+        if bitmap.bit(bit as usize) {
+            let normalized = (word_idx * 256_i16) + bit;
+            ticks.push(I24::try_from(normalized).unwrap() * tick_spacing);
         }
     }
     ticks
@@ -35,9 +35,7 @@ pub fn get_pos_from_tick(tick: I24, tick_spacing: I24) -> i16 {
 }
 pub fn next_left(word: &U256, start: &i16) -> Option<usize> {
     // clamp start to valid range 0..=255
-    let mut idx = *start
-        .max(&0_i16)
-        .min(&255_i16) as usize;
+    let mut idx = *start.max(&0_i16).min(&255_i16) as usize;
     // scan forward until we find a set bit or run out of bits
     while idx > 0 {
         idx -= 1;
@@ -50,9 +48,7 @@ pub fn next_left(word: &U256, start: &i16) -> Option<usize> {
 
 pub fn next_right(word: &U256, start: &i16) -> Option<usize> {
     // clamp start to valid range 0..=255
-    let mut idx = *start
-        .max(&0_i16)
-        .min(&255_i16) as usize;
+    let mut idx = *start.max(&0_i16).min(&255_i16) as usize;
     // scan forward until we find a set bit or run out of bits
     while idx < 255 {
         idx += 1;

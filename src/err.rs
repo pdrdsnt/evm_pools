@@ -18,6 +18,7 @@ pub enum MathError {
 #[derive(Debug)]
 pub enum TradeError {
     Tick(TickError),
+    Fetch(alloy_contract::Error),
     Math(MathError),
 }
 
@@ -30,5 +31,10 @@ impl From<TickError> for TradeError {
 impl From<MathError> for TradeError {
     fn from(value: MathError) -> Self {
         TradeError::Math(value)
+    }
+}
+impl From<alloy_contract::Error> for TradeError {
+    fn from(value: alloy_contract::Error) -> Self {
+        TradeError::Fetch(value)
     }
 }
