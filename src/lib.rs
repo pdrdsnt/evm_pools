@@ -1,8 +1,8 @@
-mod any_pool;
-mod err;
-mod v3_base;
-mod v3_pool;
-mod v4_pool;
+pub mod any_pool;
+pub mod err;
+pub mod v3_base;
+pub mod v3_pool;
+pub mod v4_pool;
 
 mod sol_types;
 //USDC BSC-USD pool
@@ -66,12 +66,6 @@ mod tests {
             Address::from_str(V4_ADDR).unwrap(),
         )
         .await;
-        if let Ok(AnyPool::V4(mut pool, key, contract)) = any_pool {
-            println!(
-                "v4 trade simulation: {:?}",
-                trade_math::trade(&pool, &key.fee, U256::ONE << 64, true).ok()
-            );
-        }
     }
 
     #[test]
