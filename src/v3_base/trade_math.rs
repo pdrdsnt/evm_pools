@@ -6,7 +6,7 @@ use alloy::primitives::{
 use crate::{
     err::{MathError, TickError, TradeError},
     v3_base::{
-        states::{PoolState, Tick, TradeState, TradeStep},
+        states::{Tick, TradeState, TradeStep, V3State},
         tick_math::{price_from_tick, tick_from_price},
         ticks::Ticks,
         x96price_math::{
@@ -21,7 +21,7 @@ pub fn retry(trade_state: TradeState, ticks: &Ticks) -> Result<TradeState, Trade
 }
 
 pub fn trade(
-    pool: &PoolState,
+    pool: &V3State,
     fee: &U24,
     amount_in: U256,
     from0: bool,
@@ -34,7 +34,7 @@ pub fn trade(
 }
 //////////////////////////////
 pub fn trade_start(
-    pool: &PoolState,
+    pool: &V3State,
     fee: &U24,
     amount_in: U256,
     from0: bool,

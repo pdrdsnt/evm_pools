@@ -11,7 +11,7 @@ pub type V3Contract =
 
 pub async fn get_v3_ticks(
     contract: V3Contract,
-    ticks: Vec<I24>,
+    ticks: &Vec<I24>,
 ) -> (Vec<Tick>, Vec<usize>) {
     let mut active_ticks = Vec::<Tick>::with_capacity(ticks.len());
 
@@ -19,7 +19,7 @@ pub async fn get_v3_ticks(
 
     let mut fut_ordered = FuturesOrdered::new();
 
-    for tick in &ticks {
+    for tick in ticks {
         let c = contract.clone();
         fut_ordered.push_back(async move { c.ticks(*tick).call().await });
     }

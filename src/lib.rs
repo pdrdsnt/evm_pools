@@ -1,5 +1,6 @@
 pub mod any_pool;
 pub mod err;
+pub mod multiprovider;
 pub mod v3_base;
 pub mod v3_pool;
 pub mod v4_pool;

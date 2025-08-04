@@ -47,7 +47,7 @@ pub struct TradeStep {
     pub delta: U256,
 }
 
-pub struct PoolState {
+pub struct V3State {
     pub current_tick: I24,
     pub ticks: Ticks,
     pub bitmap: BitMap,

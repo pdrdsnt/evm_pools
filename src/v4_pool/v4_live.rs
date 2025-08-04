@@ -12,7 +12,7 @@ pub type V4Contract =
 
 pub async fn get_v4_ticks(
     contract: V4Contract,
-    ticks: Vec<I24>,
+    ticks: &Vec<I24>,
     key: alloy::primitives::FixedBytes<32>,
 ) -> (Vec<Tick>, Vec<usize>) {
     let mut fut_ordered = FuturesOrdered::new();
@@ -21,7 +21,7 @@ pub async fn get_v4_ticks(
 
     let mut fail = Vec::new();
 
-    for tick in &ticks {
+    for tick in ticks {
         let c = contract.clone();
         let tick = *tick;
         fut_ordered.push_back(async move { c.getTickInfo(key, tick).call().await });
