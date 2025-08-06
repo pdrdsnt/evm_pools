@@ -41,7 +41,6 @@ pub struct TradeState {
 pub struct TradeStep {
     pub amount_possible: U256,
     pub next_tick: Tick,
-    pub current_tick_index: usize,
     pub next_tick_index: usize,
     pub next_price: U256,
     pub delta: U256,
@@ -50,7 +49,6 @@ pub struct TradeStep {
 pub struct V3State {
     pub current_tick: I24,
     pub ticks: Ticks,
-    pub bitmap: BitMap,
     pub liquidity: U256,
     pub x96price: U256,
 }

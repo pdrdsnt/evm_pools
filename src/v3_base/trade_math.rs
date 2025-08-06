@@ -1,6 +1,9 @@
-use alloy::primitives::{
-    U256, U512,
-    aliases::{I24, U24},
+use alloy::{
+    primitives::{
+        U256, U512,
+        aliases::{I24, U24},
+    },
+    signers::k256::ecdsa::signature::PrehashSignature,
 };
 
 use crate::{
@@ -67,14 +70,11 @@ pub fn trade_start(
         Ok(_) => return Ok(trade_state),
         Err(_) => {
             trade_state.step.next_tick.tick = trade_state.tick; //just to work with the error
-            //recovery idk
-            //if modifing this will cause problem
             return Err(TickError::Overflow(trade_state).into());
         }
     }
 }
 pub fn step_start(trade_state: &mut TradeState, ticks: &Ticks) -> Result<(), TradeError> {
-    let mut new_step = TradeStep::default(); //this is right? 
     trade_state.step.next_tick_index = match ticks.get_tick_index(trade_state.tick) {
         Ok(i) => {
             if trade_state.from0 {
@@ -166,13 +166,16 @@ pub fn trade_loop(
 ) -> Result<TradeState, TradeError> {
     while trade_state.remaining > U256::ZERO {
         step_start(&mut trade_state, ticks)?;
+        println!("hi");
         if trade_state.remaining < trade_state.step.amount_possible {
+            println!("not enough to cross finishing it");
             handle_non_crossing_step(&mut trade_state)?;
             break;
         }
 
+        println!("gettiing delta to cross");
         get_crossing_delta(&mut trade_state)?;
-
+        println!("prepping next step");
         update_state_for_next_step(&mut trade_state)?;
     }
     Ok(trade_state)
@@ -209,7 +212,7 @@ pub fn update_state_for_next_step(
             }
         };
     }
-
+    trade_state.tick = trade_state.step.next_tick.tick;
     trade_state.x96price = trade_state.step.next_price;
     trade_state.remaining = trade_state
         .remaining
@@ -238,14 +241,14 @@ pub fn handle_non_crossing_step(trade_state: &mut TradeState) -> Result<(), Trad
         )
         .ok_or(MathError::A(*trade_state))?
     };
+    println!("ah");
 
     let u512_curr_price = U512::from(trade_state.x96price);
     let u512_curr_liq = U512::from(trade_state.liquidity);
-
     // compute out
     let delta = if trade_state.from0 {
-        let price_diff = U512::from(new_price)
-            .checked_sub(u512_curr_price)
+        let price_diff = u512_curr_price
+            .checked_sub(U512::from(new_price))
             .ok_or(MathError::A(*trade_state))?;
         println!("diff {}", price_diff);
         u512_curr_liq
@@ -274,7 +277,11 @@ pub fn handle_non_crossing_step(trade_state: &mut TradeState) -> Result<(), Trad
             .checked_div(U512::from(1u128 << 96))
             .ok_or(MathError::A(*trade_state))?
     };
+    trade_state.step.delta = U256::from(delta);
 
+    println!("{}", trade_state.step.delta);
+
+    println!("be");
     trade_state.amount_out = trade_state
         .amount_out
         .checked_add(U256::from(delta))

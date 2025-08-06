@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use alloy::{
     primitives::{Address, U256, aliases::I24, keccak256},
     transports::http::reqwest::Url,
 };
 use alloy_provider::ProviderBuilder;
 use alloy_sol_types::SolValue;
+use tokio::time::sleep;
 
 use crate::{
     err::TradeError,
@@ -70,26 +73,28 @@ impl AnyPool {
             TradeError::Tick(tick_error) => match tick_error {
                 crate::err::TickError::Overflow(trade_state) => {
                     println!("overflow");
-                    let new_word_pos = bitmap_math::get_pos_from_tick(
-                        trade_state.step.next_tick.tick,
-                        tick_spacing,
-                    );
+                    let new_word_pos =
+                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing)
+                            + 1;
                     self.fetch_word_and_insert_ticks(new_word_pos)
                         .await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Underflow(trade_state) => {
-                    let new_word_pos = bitmap_math::get_pos_from_tick(
-                        trade_state.step.next_tick.tick,
-                        tick_spacing,
-                    );
+                    let new_word_pos =
+                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing)
+                            - 1;
                     self.fetch_word_and_insert_ticks(new_word_pos)
                         .await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Unavailable(trade_state) => {
-                    self.fetch_and_insert_ticks(vec![trade_state.tick], 1_u8, 1_u64)
-                        .await;
+                    self.fetch_and_insert_ticks(
+                        vec![trade_state.step.next_tick.tick],
+                        2_u8,
+                        10_u64,
+                    )
+                    .await;
 
                     state = Some(trade_state);
                 }
@@ -117,7 +122,6 @@ impl AnyPool {
         let state = V3State {
             current_tick: slot0.tick,
             ticks: Ticks::new(vec![]),
-            bitmap: BitMap::new(pool_key.tickSpacing, vec![]),
             liquidity: U256::from(liquidity),
             x96price: U256::from(slot0.sqrtPriceX96),
         };
@@ -150,7 +154,6 @@ impl AnyPool {
         let state = V3State {
             current_tick: slot0.tick,
             ticks: Ticks::new(vec![]),
-            bitmap: BitMap::new(tick_spacing, vec![]),
 
             liquidity: U256::from(liquidity),
             x96price: U256::from(slot0.sqrtPriceX96),
@@ -186,17 +189,11 @@ impl AnyPool {
         if let Ok(word) = result {
             let ts;
             match self {
-                AnyPool::V3(pool_state, k, _) => {
-                    pool_state.bitmap.insert(word_pos, word);
-                    ts = k.tick_spacing
-                }
-                AnyPool::V4(pool_state, k, _) => {
-                    pool_state.bitmap.insert(word_pos, word);
-                    ts = k.tickSpacing
-                }
+                AnyPool::V3(pool_state, k, _) => ts = k.tick_spacing,
+                AnyPool::V4(pool_state, k, _) => ts = k.tickSpacing,
             }
             let ticks = bitmap_math::extract_ticks_from_bitmap(word, word_pos, ts);
-            self.fetch_and_insert_ticks(ticks, 1, 1).await;
+            self.fetch_and_insert_ticks(ticks, 3, 10).await;
         }
         Ok(())
     }
@@ -210,23 +207,24 @@ impl AnyPool {
         &mut self,
         ticks: Vec<I24>,
         max_tries: u8,
-        try_timeout: u64,
+        duration: u64,
     ) {
         let (mut n, mut f) = self.fetch_ticks(&ticks).await;
         let mut t = 0;
         let mut new_ticks = n.clone();
         let mut rmp = f.clone();
-        let mut recall: Vec<I24> = {
-            let mut _r = vec![];
-            for (idx, tick_index) in f.iter().enumerate() {
-                let sel = new_ticks[*tick_index].tick;
-                _r.push(sel);
-            }
-
-            _r
-        };
 
         while t < max_tries && !f.is_empty() {
+            let recall: Vec<I24> = {
+                let mut _r = vec![];
+                for tick_index in f.iter() {
+                    let sel = new_ticks[*tick_index].tick;
+                    _r.push(sel);
+                }
+
+                _r
+            };
+            sleep(Duration::from_secs(duration)).await;
             println!("try: {}", t);
             t += 1;
 

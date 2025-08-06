@@ -1,6 +1,5 @@
 pub mod any_pool;
 pub mod err;
-pub mod multiprovider;
 pub mod v3_base;
 pub mod v3_pool;
 pub mod v4_pool;
@@ -43,10 +42,25 @@ mod tests {
             Address::from_str(V3_USDC_USD).unwrap(),
         )
         .await;
-        any_pool
+        let t = any_pool
             .unwrap()
             .trade(U256::ONE << 64, true)
             .await;
+        println!("{:?}", t);
+    }
+    #[tokio::test]
+    pub async fn v3_1() {
+        println!("testing for usdc bsc v3 pool");
+        let mut any_pool = AnyPool::create_v3(
+            Url::from_str(BNB_PROVIDER).unwrap(),
+            Address::from_str(V3_CAKE_USD_ADDR).unwrap(),
+        )
+        .await;
+        let t = any_pool
+            .unwrap()
+            .trade(U256::ONE << 64, true)
+            .await;
+        println!("{:?}", t);
     }
 
     #[tokio::test]
@@ -67,6 +81,11 @@ mod tests {
             Address::from_str(V4_ADDR).unwrap(),
         )
         .await;
+        let t = any_pool
+            .unwrap()
+            .trade(U256::ONE << 64, true)
+            .await;
+        println!("{:?}", t);
     }
 
     #[test]
