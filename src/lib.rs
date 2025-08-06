@@ -44,7 +44,7 @@ mod tests {
         .await;
         let t = any_pool
             .unwrap()
-            .trade(U256::ONE << 64, true)
+            .trade(U256::ONE << 64, false)
             .await;
         println!("{:?}", t);
     }

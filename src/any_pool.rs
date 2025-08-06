@@ -9,7 +9,7 @@ use alloy_sol_types::SolValue;
 use tokio::time::sleep;
 
 use crate::{
-    err::TradeError,
+    err::{MathError, TradeError},
     sol_types::{PoolKey, StateView::StateViewInstance, V3Pool::V3PoolInstance},
     v3_base::{
         bitmap::BitMap,
@@ -44,7 +44,7 @@ impl AnyPool {
             AnyPool::V3(_, k, _) => k.tick_spacing,
             AnyPool::V4(_, k, _) => k.tickSpacing,
         };
-        let result = match self {
+        let mut result = match self {
             AnyPool::V3(pool_state, v3_key, _) => {
                 trade_math::trade(&pool_state, &v3_key.fee, amount_in, from0)
             }
@@ -52,15 +52,16 @@ impl AnyPool {
                 trade_math::trade(&pool_state, &pool_key.fee, amount_in, from0)
             }
         };
+        let mut error_count = 0;
 
-        let trade_state = match result {
-            Ok(ts) => ts,
-            Err(err) => {
-                return self.handle_trade_error(err, tick_spacing).await;
+        while error_count < 3 {
+            error_count += 1;
+            match result {
+                Ok(_) => (),
+                Err(err) => result = self.handle_trade_error(err, tick_spacing).await,
             }
-        };
-
-        Ok(trade_state)
+        }
+        result
     }
 
     pub async fn handle_trade_error(
@@ -81,6 +82,7 @@ impl AnyPool {
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Underflow(trade_state) => {
+                    println!("UNDERFLOW");
                     let new_word_pos =
                         bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing)
                             - 1;
@@ -105,6 +107,7 @@ impl AnyPool {
             }
             TradeError::Fetch(err) => return Err(TradeError::Fetch(err)),
         }
+
         return trade_math::retry(state.unwrap(), self.get_ticks());
     }
 
