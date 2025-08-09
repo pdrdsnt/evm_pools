@@ -23,7 +23,7 @@ pub fn extract_ticks_from_bitmap(
     }
     for bit in 0..256_i16 {
         if bitmap.bit(bit as usize) {
-            let normalized = (word_idx * 256_i16) + bit;
+            let normalized = (word_idx as i32 * 256) + bit as i32;
             ticks.push(I24::try_from(normalized).unwrap() * tick_spacing);
         }
     }

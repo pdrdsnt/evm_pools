@@ -1,55 +1,51 @@
-use std::time::Duration;
+use std::{num::NonZeroUsize, str::FromStr, time::Duration};
 
 use alloy::{
-    primitives::{Address, U256, aliases::I24, keccak256},
-    transports::http::reqwest::Url,
+    primitives::{aliases::I24, keccak256, Address, U256},
+    providers::{Provider, ProviderBuilder},
+    rpc::client::RpcClient,
+    sol_types::SolValue,
+    transports::{http::{Http, reqwest::Url}, layers::FallbackLayer},
 };
-use alloy_provider::ProviderBuilder;
-use alloy_sol_types::SolValue;
 use tokio::time::sleep;
+use tower::ServiceBuilder;
 
 use crate::{
-    err::{MathError, TradeError},
+    err::TradeError,
     sol_types::{PoolKey, StateView::StateViewInstance, V3Pool::V3PoolInstance},
     v3_base::{
-        bitmap::BitMap,
         bitmap_math,
         states::{Tick, TradeState, V3State},
         ticks::Ticks,
         trade_math::{self},
     },
-    v3_pool::{
-        v3_key::V3Key,
-        v3_live::{V3Contract, get_v3_ticks},
-    },
-    v4_pool::{
-        v4_key::V4Key,
-        v4_live::{V4Contract, get_v4_ticks},
-    },
+    v3_pool::{get_v3_ticks, V3Key},
+    v4_pool::{get_v4_ticks, V4Key},
 };
 
-pub enum AnyPool {
-    V3(V3State, V3Key, V3Contract),
-    V4(V3State, V4Key, V4Contract),
+// Make AnyPool generic over the provider type P
+pub enum AnyPool<P: Provider> {
+    V3(V3State, V3Key, V3PoolInstance<P>),
+    V4(V3State, V4Key, StateViewInstance<P>),
 }
 
-impl AnyPool {
+// Add the generic parameter to the impl block
+impl<P: Provider + Clone> AnyPool<P> {
     pub async fn trade(
         &mut self,
         amount_in: U256,
         from0: bool,
     ) -> Result<TradeState, TradeError> {
-        //needed to fetch new words
         let tick_spacing = match self {
             AnyPool::V3(_, k, _) => k.tick_spacing,
             AnyPool::V4(_, k, _) => k.tickSpacing,
         };
         let mut result = match self {
             AnyPool::V3(pool_state, v3_key, _) => {
-                trade_math::trade(&pool_state, &v3_key.fee, amount_in, from0)
+                trade_math::trade(pool_state, &v3_key.fee, amount_in, from0)
             }
             AnyPool::V4(pool_state, pool_key, _) => {
-                trade_math::trade(&pool_state, &pool_key.fee, amount_in, from0)
+                trade_math::trade(pool_state, &pool_key.fee, amount_in, from0)
             }
         };
         let mut error_count = 0;
@@ -57,7 +53,7 @@ impl AnyPool {
         while error_count < 3 {
             error_count += 1;
             match result {
-                Ok(_) => (),
+                Ok(_) => break,
                 Err(err) => result = self.handle_trade_error(err, tick_spacing).await,
             }
         }
@@ -75,19 +71,15 @@ impl AnyPool {
                 crate::err::TickError::Overflow(trade_state) => {
                     println!("overflow");
                     let new_word_pos =
-                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing)
-                            + 1;
-                    self.fetch_word_and_insert_ticks(new_word_pos)
-                        .await?;
+                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing) + 1;
+                    self.fetch_word_and_insert_ticks(new_word_pos).await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Underflow(trade_state) => {
                     println!("UNDERFLOW");
                     let new_word_pos =
-                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing)
-                            - 1;
-                    self.fetch_word_and_insert_ticks(new_word_pos)
-                        .await?;
+                        bitmap_math::get_pos_from_tick(trade_state.tick, tick_spacing) - 1;
+                    self.fetch_word_and_insert_ticks(new_word_pos).await?;
                     state = Some(trade_state);
                 }
                 crate::err::TickError::Unavailable(trade_state) => {
@@ -97,26 +89,23 @@ impl AnyPool {
                         10_u64,
                     )
                     .await;
-
                     state = Some(trade_state);
                 }
             },
-            //
             TradeError::Math(math_error) => {
                 return Err(math_error.into());
             }
             TradeError::Fetch(err) => return Err(TradeError::Fetch(err)),
         }
 
-        return trade_math::retry(state.unwrap(), self.get_ticks());
+        trade_math::retry(state.unwrap(), self.get_ticks())
     }
 
     pub async fn create_v4(
         pool_key: PoolKey,
-        provider_url: Url,
+        provider: P,
         contract_addr: Address,
-    ) -> Result<AnyPool, alloy_contract::Error> {
-        let provider = ProviderBuilder::new().connect_http(provider_url);
+    ) -> Result<Self, alloy_contract::Error> {
         let contract = StateViewInstance::new(contract_addr, provider);
         let encoded_key = pool_key.abi_encode();
         let pool_id = keccak256(encoded_key);
@@ -128,15 +117,16 @@ impl AnyPool {
             liquidity: U256::from(liquidity),
             x96price: U256::from(slot0.sqrtPriceX96),
         };
+
         let any_pool = AnyPool::V4(state, pool_key, contract);
 
         Ok(any_pool)
     }
+
     pub async fn create_v3(
-        provider_url: Url,
+        provider: P,
         addr: Address,
-    ) -> Result<AnyPool, alloy_contract::Error> {
-        let provider = ProviderBuilder::new().connect_http(provider_url);
+    ) -> Result<Self, alloy_contract::Error> {
         let contract = V3PoolInstance::new(addr, provider);
 
         let token_0 = contract.token0().call().await?;
@@ -144,8 +134,8 @@ impl AnyPool {
         let slot0 = contract.slot0().call().await?;
         let fee = contract.fee().call().await?;
         let tick_spacing = contract.tickSpacing().call().await?;
-
         let liquidity = contract.liquidity().call().await?;
+
         println!("v3 price: {}", slot0.sqrtPriceX96);
         let config = V3Key {
             address: addr,
@@ -157,10 +147,10 @@ impl AnyPool {
         let state = V3State {
             current_tick: slot0.tick,
             ticks: Ticks::new(vec![]),
-
             liquidity: U256::from(liquidity),
             x96price: U256::from(slot0.sqrtPriceX96),
         };
+
         let any_pool = AnyPool::V3(state, config, contract);
 
         Ok(any_pool)
@@ -178,10 +168,12 @@ impl AnyPool {
         word_pos: i16,
     ) -> Result<(), alloy_contract::Error> {
         let result = match self {
-            AnyPool::V3(_, _, v3_pool_instance) => {
-                v3_pool_instance.tickBitmap(word_pos).call().await
+            AnyPool::V3(_, _, v3_caller) => {
+                v3_caller
+                    .tickBitmap(word_pos)
+                    .call()
+                    .await
             }
-
             AnyPool::V4(_, pool_key, state_view_instance) => {
                 state_view_instance
                     .getTickBitmap(keccak256(pool_key.abi_encode()), word_pos)
@@ -190,22 +182,23 @@ impl AnyPool {
             }
         };
         if let Ok(word) = result {
-            let ts;
-            match self {
-                AnyPool::V3(pool_state, k, _) => ts = k.tick_spacing,
-                AnyPool::V4(pool_state, k, _) => ts = k.tickSpacing,
-            }
+            let ts = match self {
+                AnyPool::V3(_, k, _) => k.tick_spacing,
+                AnyPool::V4(_, k, _) => k.tickSpacing,
+            };
             let ticks = bitmap_math::extract_ticks_from_bitmap(word, word_pos, ts);
             self.fetch_and_insert_ticks(ticks, 3, 10).await;
         }
         Ok(())
     }
+
     pub fn get_ticks(&self) -> &Ticks {
         match self {
-            AnyPool::V3(pool_state, _, _) => return &pool_state.ticks,
-            AnyPool::V4(pool_state, _, _) => return &pool_state.ticks,
+            AnyPool::V3(pool_state, _, _) => &pool_state.ticks,
+            AnyPool::V4(pool_state, _, _) => &pool_state.ticks,
         }
     }
+
     pub async fn fetch_and_insert_ticks(
         &mut self,
         ticks: Vec<I24>,
@@ -224,7 +217,6 @@ impl AnyPool {
                     let sel = new_ticks[*tick_index].tick;
                     _r.push(sel);
                 }
-
                 _r
             };
             sleep(Duration::from_secs(duration)).await;
@@ -249,11 +241,27 @@ impl AnyPool {
 
     pub async fn fetch_ticks(&mut self, ticks: &Vec<I24>) -> (Vec<Tick>, Vec<usize>) {
         match self {
-            AnyPool::V3(_, _, contract) => get_v3_ticks(contract.clone(), ticks).await,
+            AnyPool::V3(_, _, caller) => get_v3_ticks(caller.clone(), ticks).await,
             AnyPool::V4(_, key, contract) => {
                 let key = keccak256(key.abi_encode());
                 get_v4_ticks(contract.clone(), ticks, key).await
             }
         }
     }
+}
+
+pub fn generate_fallback_provider(urls: Vec<&str>) -> impl Provider {
+    let layer =
+        FallbackLayer::default().with_active_transport_count(NonZeroUsize::new(4).unwrap());
+    let mut transports = Vec::new();
+    for s in urls {
+        if let Ok(url) = Url::from_str(s) {
+            transports.push(Http::new(url));
+        }
+    }
+
+    let service = ServiceBuilder::new().layer(layer).service(transports);
+
+    let cl = RpcClient::builder().transport(service, false);
+    ProviderBuilder::new().connect_client(cl)
 }

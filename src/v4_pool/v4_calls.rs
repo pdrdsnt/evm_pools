@@ -1,28 +1,32 @@
 use alloy::primitives::aliases::I24;
 use alloy_provider::{
-    RootProvider, fillers::FillProvider, utils::JoinedRecommendedFillers,
+    Provider, RootProvider, fillers::FillProvider, utils::JoinedRecommendedFillers,
 };
 use futures::{StreamExt, stream::FuturesOrdered};
 
-use crate::{sol_types::V3Pool::V3PoolInstance, v3_base::states::Tick};
+use crate::{sol_types::StateView::StateViewInstance, v3_base::states::Tick};
 
-pub type V3Contract =
-    V3PoolInstance<FillProvider<JoinedRecommendedFillers, RootProvider>>;
+pub type V4Contract =
+    StateViewInstance<FillProvider<JoinedRecommendedFillers, RootProvider>>;
+//unique stae view
 
-pub async fn get_v3_ticks(
-    contract: V3Contract,
+pub async fn get_v4_ticks<P: Provider + Clone + Send + Sync>(
+    contract: StateViewInstance<P>,
     ticks: &Vec<I24>,
+    key: alloy::primitives::FixedBytes<32>,
 ) -> (Vec<Tick>, Vec<usize>) {
+    let mut fut_ordered = FuturesOrdered::new();
+
     let mut active_ticks = Vec::<Tick>::with_capacity(ticks.len());
 
     let mut fail = Vec::new();
 
-    let mut fut_ordered = FuturesOrdered::new();
-
     for tick in ticks {
         let c = contract.clone();
-        fut_ordered.push_back(async move { c.ticks(*tick).call().await });
+        let tick = *tick;
+        fut_ordered.push_back(async move { c.getTickInfo(key, tick).call().await });
     }
+
     let mut tick_index = 0;
     while let Some(result) = fut_ordered.next().await {
         let current_tick = &ticks[tick_index];

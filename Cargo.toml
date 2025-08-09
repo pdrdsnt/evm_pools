@@ -1,7 +1,7 @@
 [package]
 name = "eth_pools"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 alloy = { version = "1.0.9"}
@@ -11,3 +11,7 @@ alloy-contract = "1.0.9"
 anyhow = "1.0.98"
 tokio = { version = "1", features = ["macros"] }
 futures = "0.3.31"
+reqwest = { version = "0.12.22", features = ["json"] }
+serde = "1.0.219"
+async-trait = "0.1.88"
+tower = "0.5.2"
