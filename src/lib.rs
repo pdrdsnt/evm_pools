@@ -1,10 +1,9 @@
 pub mod any_pool;
 pub mod err;
+pub mod sol_types;
 pub mod v3_base;
 pub mod v3_pool;
 pub mod v4_pool;
-
-mod sol_types;
 #[cfg(test)]
 mod tests {
     //USDC BSC-USD pool
