@@ -20,6 +20,7 @@ pub enum TradeError {
     Tick(TickError),
     Fetch(alloy_contract::Error),
     Math(MathError),
+    V2,
 }
 
 impl From<TickError> for TradeError {

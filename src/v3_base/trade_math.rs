@@ -1,15 +1,9 @@
-use alloy::{
-    primitives::{
-        U256, U512,
-        aliases::{I24, U24},
-    },
-    signers::k256::ecdsa::signature::PrehashSignature,
-};
+use alloy::primitives::{aliases::U24, U256, U512};
 
 use crate::{
     err::{MathError, TickError, TradeError},
     v3_base::{
-        states::{Tick, TradeState, TradeStep, V3State},
+        states::{TradeState, TradeStep, V3State},
         tick_math::{price_from_tick, tick_from_price},
         ticks::Ticks,
         x96price_math::{
@@ -48,9 +42,9 @@ pub fn trade_start(
         amount_out: U256::ZERO,
         x96price: pool.x96price,
         liquidity: pool.liquidity,
-        amount_in: amount_in,
-        tick: pool.current_tick,
-        from0: from0,
+        amount_in,
+        tick: pool.tick,
+        from0,
         step: TradeStep::default(),
     };
     let fee_amount = amount_in

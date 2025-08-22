@@ -1,17 +1,13 @@
-use std::collections::HashMap;
-
 use alloy::primitives::{
-    Address, U256,
     aliases::{I24, U24},
+    Address, U256,
 };
+use serde::{Deserialize, Serialize};
 
-use crate::v3_base::{bitmap::BitMap, ticks::Ticks};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct Tick {
-    pub tick: I24,
-    pub liquidity_net: Option<i128>,
-}
+use crate::v3_base::{
+    bitmap::BitMap,
+    ticks::{Tick, Ticks},
+};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct TradeReceipt {
@@ -45,10 +41,11 @@ pub struct TradeStep {
     pub next_price: U256,
     pub delta: U256,
 }
-
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct V3State {
-    pub current_tick: I24,
+    pub tick: I24,
     pub ticks: Ticks,
+    pub bitmap: BitMap,
     pub liquidity: U256,
     pub x96price: U256,
 }

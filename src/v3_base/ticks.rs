@@ -1,10 +1,22 @@
 use alloy::primitives::aliases::I24;
+use serde::{Deserialize, Serialize};
 
-use crate::v3_base::states::{Tick, TradeState};
 
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
 pub struct Ticks {
     ticks: Vec<Tick>,
 }
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
+pub struct Tick {
+    pub tick: I24,
+    pub liquidity_net: Option<i128>,
+}
+
 impl Ticks {
     pub fn new(mut ticks: Vec<Tick>) -> Ticks {
         ticks.sort_by_key(|x| x.tick);

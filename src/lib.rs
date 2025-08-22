@@ -1,9 +1,24 @@
+use std::{num::NonZeroUsize, str::FromStr};
+
+use alloy::{
+    rpc::client::RpcClient,
+    transports::{http::Http, layers::FallbackLayer},
+};
+use alloy_provider::{Provider, ProviderBuilder};
+use reqwest::Url;
+use tower::ServiceBuilder;
+
+pub mod any_factory;
 pub mod any_pool;
+pub mod any_trade;
 pub mod err;
+pub mod pool_contract;
+
+pub mod pools_manager;
 pub mod sol_types;
+pub mod v2_pool;
 pub mod v3_base;
-pub mod v3_pool;
-pub mod v4_pool;
+
 #[cfg(test)]
 mod tests {
     //USDC BSC-USD pool
@@ -38,36 +53,57 @@ mod tests {
             BNB_PROVIDER_3,
             BNB_PROVIDER_4,
         ];
-        let provider = Arc::new(crate::any_pool::generate_fallback_provider(urls));
+        let provider = Arc::new(generate_fallback_provider(urls));
+
+        let amount_in = U256::from(1000000000000_u64); // 1 USD
+        let from_token_0 = true;
 
         let usdc_usd_address: Address = V3_USDC_USD.parse().unwrap();
         let usdt_bnb_address: Address = V3_USDT_BNB_ADDR.parse().unwrap();
         let cake_usd_address: Address = V3_CAKE_USD_ADDR.parse().unwrap();
 
-        let mut usdc_usd_pool = AnyPool::create_v3(provider.clone(), usdc_usd_address)
-            .await
-            .unwrap();
+        if let Some(mut usdc_usd_pool) =
+            AnyPool::create_v3_from_address(usdc_usd_address, provider.clone()).await
+        {
+            println!("usdc usd pool created: {:?}", usdc_usd_pool);
 
-        let mut usdt_bnb_pool = AnyPool::create_v3(provider.clone(), usdt_bnb_address)
-            .await
-            .unwrap();
+            let usdc_usd_result = usdc_usd_pool.trade(amount_in, from_token_0);
+            println!("usdc usd trade: {:?}", usdc_usd_result);
+        }
 
-        let mut cake_usd_pool = AnyPool::create_v3(provider.clone(), cake_usd_address)
-            .await
-            .unwrap();
-        let amount_in = U256::from(1000000000000_u64); // 1 USD
-        let from_token_0 = true;
+        if let Some(mut usdt_bnb_pool) =
+            AnyPool::create_v3_from_address(usdt_bnb_address, provider.clone()).await
+        {
+            println!("usdc usd pool created: {:?}", usdt_bnb_pool);
 
-        let usdc_usd_result = usdc_usd_pool.trade(amount_in, from_token_0).await;
+            let usdt_bnb_result = usdt_bnb_pool.trade(amount_in, from_token_0);
+            println!("usdt bnb trade: {:?}", usdt_bnb_result);
+        }
 
-        println!("usdc usd trade: {:?}", usdc_usd_result);
+        if let Some(mut cake_usd_pool) =
+            AnyPool::create_v3_from_address(cake_usd_address, provider.clone()).await
+        {
+            println!("usdc usd pool created: {:?}", cake_usd_pool);
 
-        let cake_usd_result = cake_usd_pool.trade(amount_in, from_token_0).await;
-
-        println!("usdc usd trade: {:?}", cake_usd_result);
-
-        let usdt_bnb_result = usdt_bnb_pool.trade(amount_in, from_token_0).await;
-
-        println!("usdc usd trade: {:?}", usdt_bnb_result);
+            let cake_usd_result = cake_usd_pool.trade(amount_in, from_token_0);
+            println!("cake usd trade: {:?}", cake_usd_result);
+        }
     }
+}
+pub fn generate_fallback_provider(urls: Vec<&str>) -> impl Provider + Clone {
+    let layer = FallbackLayer::default()
+        .with_active_transport_count(NonZeroUsize::new(urls.len()).unwrap());
+    let mut transports = Vec::new();
+    for s in urls {
+        if let Ok(url) = Url::from_str(&s) {
+            transports.push(Http::new(url));
+        }
+    }
+
+    let service = ServiceBuilder::new()
+        .layer(layer)
+        .service(transports);
+
+    let cl = RpcClient::builder().transport(service, false);
+    ProviderBuilder::new().connect_client(cl)
 }
