@@ -14,7 +14,6 @@ pub mod any_trade;
 pub mod err;
 pub mod pool_contract;
 
-pub mod pools_manager;
 pub mod sol_types;
 pub mod v2_pool;
 pub mod v3_base;
@@ -34,12 +33,9 @@ mod tests {
     const BNB_PROVIDER_2: &str = "https://bsc.rpc.blxrbdn.com";
     const BNB_PROVIDER_3: &str = "https://bsc-mainnet.public.blastapi.io";
     const BNB_PROVIDER_4: &str = "https://bsc.drpc.org";
-    use std::{str::FromStr, sync::Arc};
+    use std::sync::Arc;
 
-    use alloy::{
-        primitives::{Address, U256},
-        providers::Provider,
-    };
+    use alloy::primitives::{Address, U256};
 
     use crate::any_pool::AnyPool;
 

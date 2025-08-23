@@ -1,5 +1,3 @@
-use std::intrinsics::atomic_singlethreadfence_acqrel;
-
 use alloy::primitives::{
     aliases::{I24, U24},
     keccak256, Address, B256, U160, U256,
@@ -58,6 +56,10 @@ impl AnyPool {
     }
 
     pub async fn create_v2_from_address<P: Provider>(
+        //v2 receives a fee since is hard coded,
+        //we need to match know factories with fees before calling
+        //or passing the list here and calling factory()
+        //or just using the uniswap default 3000
         addr: Address,
         fee: Option<u32>,
         provider: P,
@@ -96,20 +98,32 @@ impl AnyPool {
         Some(Self::V2(state, addr))
     }
 
-    pub async fn sync_v3<P: Provider>(state: &mut V3State, contract: V3PoolInstance<P>) {
+    //deAl with error later doesnt matter why it fails now
+    pub async fn sync_v3<P: Provider>(
+        state: &mut V3State,
+        contract: V3PoolInstance<P>,
+    ) -> Result<(), ()> {
         if let Ok(liquidity) = contract.liquidity().call().await {
             state.liquidity = U256::from(liquidity);
-            if liquidity != 0 {}
+            if liquidity == 0 {
+                return Err(());
+            }
         }
+
         if let Ok(slot0) = contract.slot0().call().await {
             state.x96price = U256::from(slot0.sqrtPriceX96);
             state.tick = slot0.tick;
 
-            if slot0.sqrtPriceX96 != U160::ZERO {}
+            if slot0.sqrtPriceX96 != U160::ZERO {
+                return Err(());
+            }
+            return Ok(());
         }
+        Err(())
     }
 
     pub async fn create_v3_from_address<P: Provider>(
+        //v3 reveives a provider and an address
         addr: Address,
         provider: P,
     ) -> Option<AnyPool> {
@@ -160,15 +174,16 @@ impl AnyPool {
     }
 
     pub async fn create_v4_from_key<P: Provider>(
+        //v4 receives a contract directly since
+        //it is one manager for all pool in one dex
+        //so we dont need a pair contract, only a key
         contract: StateViewInstance<P>,
-        key: V4Key,
-        provider: P,
+        key: PoolKey,
     ) -> Option<AnyPool> {
         let mut state = V3State::default();
         let mut one_valid_answer = false;
 
-        let _id: PoolKey = key.into();
-        let id = keccak256(_id.abi_encode());
+        let id = keccak256(key.abi_encode());
         if let Ok(liquidity) = contract.getLiquidity(id).call().await {
             state.liquidity = U256::from(liquidity);
             if liquidity != 0 {
@@ -188,8 +203,7 @@ impl AnyPool {
         if !one_valid_answer {
             return None;
         }
-
-        Some(Self::V4(state, key, id, addr))
+        Some(Self::V4(state, key.into(), id, contract.address().clone()))
     }
 
     pub fn build_contract<P: Provider + Clone>(&self, provider: P) -> PoolContract<P> {
@@ -224,6 +238,18 @@ impl Into<PoolKey> for V4Key {
             fee: self.fee,
             tickSpacing: self.tickSpacing,
             hooks: self.hooks,
+        }
+    }
+}
+
+impl From<PoolKey> for V4Key {
+    fn from(value: PoolKey) -> Self {
+        Self {
+            currency0: value.currency0,
+            currency1: value.currency1,
+            fee: value.fee,
+            tickSpacing: value.tickSpacing,
+            hooks: value.hooks,
         }
     }
 }
