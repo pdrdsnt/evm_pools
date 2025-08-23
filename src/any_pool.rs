@@ -1,3 +1,5 @@
+use std::intrinsics::atomic_singlethreadfence_acqrel;
+
 use alloy::primitives::{
     aliases::{I24, U24},
     keccak256, Address, B256, U160, U256,
@@ -92,6 +94,19 @@ impl AnyPool {
         }
 
         Some(Self::V2(state, addr))
+    }
+
+    pub async fn sync_v3<P: Provider>(state: &mut V3State, contract: V3PoolInstance<P>) {
+        if let Ok(liquidity) = contract.liquidity().call().await {
+            state.liquidity = U256::from(liquidity);
+            if liquidity != 0 {}
+        }
+        if let Ok(slot0) = contract.slot0().call().await {
+            state.x96price = U256::from(slot0.sqrtPriceX96);
+            state.tick = slot0.tick;
+
+            if slot0.sqrtPriceX96 != U160::ZERO {}
+        }
     }
 
     pub async fn create_v3_from_address<P: Provider>(

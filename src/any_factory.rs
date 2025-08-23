@@ -103,7 +103,7 @@ impl<P: Provider> AnyFactory<P> {
                         if let Some(pool) = AnyPool::create_v4_from_address(
                             state_view_instance.address(),
                             key,
-                            iuniswap_v3_factory_instance.provider(),
+                            state_view_instance.provider(),
                         )
                         .await
                         {
