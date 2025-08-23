@@ -33,7 +33,7 @@ mod tests {
     const BNB_PROVIDER_2: &str = "https://bsc.rpc.blxrbdn.com";
     const BNB_PROVIDER_3: &str = "https://bsc-mainnet.public.blastapi.io";
     const BNB_PROVIDER_4: &str = "https://bsc.drpc.org";
-    use std::sync::Arc;
+    use std::{fmt::Debug, sync::Arc};
 
     use alloy::primitives::{Address, U256};
 
