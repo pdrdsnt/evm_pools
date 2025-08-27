@@ -12,10 +12,10 @@ pub enum AnyFactory<P: Provider + Clone> {
     V4(StateViewInstance<P>),
 }
 
-const COMMON_FEES: [u32; 10] = [
+pub const COMMON_FEES: [u32; 10] = [
     100, 250, 500, 1000, 1500, 2000, 2500, 3000, 5000, 10000,
 ];
 
-const COMMON_TICK_SPACINGS: [i32; 20] = [
+pub const COMMON_TICK_SPACINGS: [i32; 20] = [
     1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 100, 110, 120, 130, 140, 160, 200, 240,
 ];

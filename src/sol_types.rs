@@ -1,4 +1,3 @@
-
 alloy_sol_types::sol! {
 
 type IHooks is address;
@@ -202,5 +201,84 @@ interface IERC721 {
         event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
         event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
         event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+    }
+
+#[sol(rpc)]
+interface IERC165 {
+
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
+        return interfaceId == type(IERC165).interfaceId;
+    }
+}
+interface ICurveMetaRegistry {
+        // Registry Discovery
+        function registry_length() external view returns (uint256);
+        function pool_list(uint256 index) external view returns (address);
+        function get_pool_name(address pool) external view returns (string);
+        function is_meta(address pool) external view returns (bool);
+
+        // Pool Introspection via RegistryHandler APIs
+        function get_n_coins(address pool) external view returns (uint256);
+        function get_coins(address pool) external view returns (address[8]);
+        function get_underlying_coins(address pool) external view returns (address[8]);
+        function get_balances(address pool) external view returns (uint256[8]);
+        function get_underlying_balances(address pool) external view returns (uint256[8]);
+        function get_coin_indices(address pool, address from, address to) external view returns (int128, int128, bool);
+    }
+    // StableSwap v1 (plain pool)
+    interface ICurveV1PlainPool {
+        // Core quoting / swapping
+        function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
+        function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
+
+        // Pool state
+        function A() external view returns (uint256);                // amplification
+        function fee() external view returns (uint256);             // swap fee (1e10 or 1e8 style, pool-dependent)
+        function get_virtual_price() external view returns (uint256);
+
+        // Balances & coins
+        function balances(uint256 index) external view returns (uint256);
+        function coins(uint256 index) external view returns (address);
+
+        // Optional but common
+        function admin_fee() external view returns (uint256);
+        // Some pools expose N_COINS as an immut/const; not always callable.
+    }
+    interface ICurveV1Underlying {
+        // Underlying coins (e.g., DAI/USDC/USDT beneath cTokens or meta setup)
+        function underlying_coins(uint256 index) external view returns (address);
+
+        // Underlying quoting / swapping
+        function get_dy_underlying(int128 i, int128 j, uint256 dx) external view returns (uint256);
+        function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
+
+        // Optional convenience for meta pools
+        function base_pool() external view returns (address);
+    }
+interface ICurveV2CryptoPool {
+        // Core quoting / swapping
+        function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
+        function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
+
+        // Coins & balances
+        function coins(uint256 index) external view returns (address);
+        function balances(uint256 index) external view returns (uint256);
+
+        // Dynamic fee & parameters
+        function fee() external view returns (uint256);        // current effective fee (computed)
+        function gamma() external view returns (uint256);
+        function mid_fee() external view returns (uint256);
+        function out_fee() external view returns (uint256);
+        function fee_gamma() external view returns (uint256);
+
+        // Pricing / oracles
+        function get_virtual_price() external view returns (uint256);
+        function price_scale(uint256 index) external view returns (uint256);
+        function price_oracle(uint256 index) external view returns (uint256);
+        function last_prices(uint256 index) external view returns (uint256);
+    }
+ interface ICurveFactory {
+        function pool_count() external view returns (uint256);
+        function pool_list(uint256 index) external view returns (address);
     }
 }

@@ -2,42 +2,20 @@ use alloy::primitives::{Address, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct V2Pool {
-    pub address: Address,
-    pub token0: Address,
-    pub token1: Address,
-    pub exchange: String,
-    pub version: String,
-    pub fee: u32,
+pub struct V2State {
     pub reserves0: U256,
     pub reserves1: U256,
 }
 
-impl V2Pool {
-    // Private constructor
-    pub fn new(
-        exchange: String,
-        version: String,
-        fee: u32,
-        address: Address,
-        token0: Address,
-        token1: Address,
-        reserves0: U256,
-        reserves1: U256,
-    ) -> Self {
-        Self {
-            address,
-            token0,
-            token1,
-            exchange,
-            version,
-            fee,
-            reserves0,
-            reserves1,
-        }
-    }
+pub struct V2Key {
+    pub fee: u32,
+    pub address: Address,
+    pub token0: Address,
+    pub token1: Address,
+}
 
-    pub fn trade(&self, amount_in: U256, from0: bool) -> Option<V2Trade> {
+impl V2State {
+    pub fn trade(&self, amount_in: U256, fee: u32, from0: bool) -> Option<V2Trade> {
         if (from0 && self.reserves0 == U256::ZERO)
             || (!from0 && self.reserves1 == U256::ZERO)
         {
@@ -50,10 +28,13 @@ impl V2Pool {
             false => (self.reserves1, self.reserves0),
         };
 
+        let sfee = fee / 1000;
+
         // 3. Apply V2 fee calculation correctly (0.3% fee)
         let amount_in_less_fee = amount_in
-            .checked_mul(U256::from(997))?
+            .checked_mul(U256::from(1000 - sfee))?
             .checked_div(U256::from(1000))?;
+
         let numerator = amount_in_less_fee.checked_mul(reserve_out)?;
         let denominator = reserve_in.checked_add(amount_in_less_fee)?;
         let amount_out = numerator.checked_div(denominator)?;
@@ -90,11 +71,11 @@ impl V2Pool {
 }
 #[derive(Debug, Default)]
 pub struct V2Trade {
-    fee_amount: U256,
-    amount_in: U256,
-    amount_out: U256,
-    from0: bool,
-    new_price: U256,
-    new_reserves0: U256,
-    new_reserves1: U256,
+    pub fee_amount: U256,
+    pub amount_in: U256,
+    pub amount_out: U256,
+    pub from0: bool,
+    pub new_price: U256,
+    pub new_reserves0: U256,
+    pub new_reserves1: U256,
 }

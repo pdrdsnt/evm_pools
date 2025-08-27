@@ -3,9 +3,10 @@ use alloy::primitives::{aliases::U24, U256, U512};
 use crate::{
     err::{MathError, TickError, TradeError},
     v3_base::{
-        states::{TradeState, TradeStep, V3State},
+        states::{TradeState, TradeStep},
         tick_math::{price_from_tick, tick_from_price},
         ticks::Ticks,
+        v3_state::V3State,
         x96price_math::{
             compute_amount_possible, compute_price_from0, compute_price_from1,
         },

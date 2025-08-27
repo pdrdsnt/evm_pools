@@ -41,11 +41,3 @@ pub struct TradeStep {
     pub next_price: U256,
     pub delta: U256,
 }
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct V3State {
-    pub tick: I24,
-    pub ticks: Ticks,
-    pub bitmap: BitMap,
-    pub liquidity: U256,
-    pub x96price: U256,
-}

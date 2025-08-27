@@ -1,14 +1,12 @@
 use alloy::primitives::aliases::I24;
 use serde::{Deserialize, Serialize};
 
-
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize,
 )]
 pub struct Ticks {
     ticks: Vec<Tick>,
 }
-
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize,
 )]
@@ -26,6 +24,7 @@ impl Ticks {
             ticks,
         }
     }
+
     pub fn get_tick_index(&self, tick: I24) -> Result<usize, usize> {
         let result = self.ticks.binary_search_by_key(&tick, |t| t.tick);
         result
@@ -73,9 +72,11 @@ impl Ticks {
         }
         self.ticks = all_ticks;
     }
+
     pub fn len(&self) -> usize {
         self.ticks.len()
     }
+
     pub fn get(&self, index: usize) -> Option<&Tick> {
         self.ticks.get(index)
     }

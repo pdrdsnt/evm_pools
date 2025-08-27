@@ -7,7 +7,7 @@ use crate::{
     v3_base::bitmap_math,
 };
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BitMap {
     bitmap: Vec<Option<U256>>,
 }
