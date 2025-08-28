@@ -15,28 +15,36 @@ use crate::{
     v4_pool::V4Pool,
 };
 
-pub enum AnyPool<P: Provider + Clone> {
+pub enum AnyPool<P: Provider> {
     V2(V2Pool<P>),
     V3(V3Pool<P>),
     V4(V4Pool<P>),
 }
 
-impl<P: Provider + Clone> AnyPool<P> {
+impl<P: Provider> AnyPool<P> {
     pub async fn super_sync(&mut self) -> Result<(), ()> {
         match self {
             AnyPool::V2(v2_pool) => v2_pool.sync().await,
+
             AnyPool::V3(v3_pool) => {
-                v3_pool.sync().await;
-                v3_pool.sync_ticks().await
+                if let Ok(_) = v3_pool.sync().await {
+                    v3_pool.sync_ticks().await
+                } else {
+                    Err(())
+                }
             }
+
             AnyPool::V4(v4_pool) => {
-                v4_pool.sync();
-                v4_pool.sync_ticks().await
+                if let Ok(_) = v4_pool.sync().await {
+                    v4_pool.sync_ticks().await
+                } else {
+                    Err(())
+                }
             }
         }
     }
 }
-impl<P: Provider + Clone> UniPool for AnyPool<P> {
+impl<P: Provider> UniPool for AnyPool<P> {
     fn trade(
         &mut self,
         amount: alloy::primitives::U256,
@@ -109,13 +117,24 @@ impl<P: Provider + Clone> UniPool for AnyPool<P> {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct V4Key {
     pub currency0: Address,
     pub currency1: Address,
     pub fee: U24,
     pub tickspacing: I24,
     pub hooks: Address,
+}
+impl Default for V4Key {
+    fn default() -> Self {
+        Self {
+            currency0: Address::ZERO,
+            currency1: Address::ZERO,
+            fee: U24::from(3000),
+            tickspacing: I24::try_from(1).unwrap(),
+            hooks: Address::ZERO,
+        }
+    }
 }
 
 impl Into<PoolKey> for V4Key {
@@ -141,7 +160,7 @@ impl From<PoolKey> for V4Key {
         }
     }
 }
-impl<P: Provider + Clone> Debug for AnyPool<P> {
+impl<P: Provider> Debug for AnyPool<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AnyPool::V2(v2_pool) => {

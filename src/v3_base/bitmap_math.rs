@@ -1,4 +1,4 @@
-use alloy::primitives::{U256, aliases::I24};
+use alloy::primitives::{aliases::I24, U256};
 
 /// Normalize a tick by tick spacing (division towards zero)
 pub fn normalize_tick(current_tick: I24, tick_spacing: I24) -> I24 {

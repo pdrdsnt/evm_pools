@@ -15,6 +15,7 @@ use crate::{
         ticks::{Tick, Ticks},
     },
 };
+
 pub trait UniPool {
     fn trade(
         &mut self,

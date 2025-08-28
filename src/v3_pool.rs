@@ -14,8 +14,13 @@ use alloy::{
 use alloy_contract::{CallBuilder, EthCall};
 use alloy_provider::{Caller, EthCallMany, MulticallBuilder, Provider, ProviderBuilder};
 use alloy_sol_types::SolCall;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{
+    future::{try_join, try_join4},
+    stream::{FuturesOrdered, FuturesUnordered},
+    StreamExt,
+};
 use reqwest::Client;
+use tokio::try_join;
 
 use crate::{
     any_pool::{AnyPool, V4Key},
@@ -31,6 +36,7 @@ use crate::{
         v3_state::V3State,
     },
 };
+
 pub struct V3Pool<P: Provider> {
     pub key: V4Key,
     pub state: V3State,
@@ -38,17 +44,67 @@ pub struct V3Pool<P: Provider> {
 }
 
 impl<P: Provider> V3Pool<P> {
-    pub fn new(address: alloy::primitives::Address, provider: P) -> Self {
+    pub fn new_from_key(
+        address: alloy::primitives::Address,
+        provider: P,
+        key: V4Key,
+    ) -> Result<Self, ()> {
+        if key.tickspacing <= I24::ZERO {
+            return Err(());
+        }
         let contract = V3PoolInstance::new(address, provider);
 
         let state = V3State::default(I24::ONE);
-        let key = V4Key::default();
 
-        Self {
+        let p = Self {
             key,
             state,
             contract,
+        };
+
+        Ok(p)
+    }
+    pub async fn new_from_address(
+        address: alloy::primitives::Address,
+        provider: P,
+    ) -> Result<Self, ()> {
+        let contract = V3PoolInstance::new(address, provider);
+
+        let state = V3State::default(I24::ONE);
+
+        let mut key = V4Key::default();
+
+        let t0call = contract.token0();
+        let t1call = contract.token1();
+        let feecall = contract.fee();
+        let tscall = contract.tickSpacing();
+
+        if let Ok((t0, t1, fee, ts)) =
+            try_join!(t0call.call(), t1call.call(), feecall.call(), tscall.call())
+        {
+            key.currency0 = t0;
+            key.currency1 = t1;
+            key.fee = fee;
+            key.tickspacing = ts;
+        } else {
+            return Err(());
         }
+
+        let mut p = Self {
+            key,
+            state,
+            contract,
+        };
+
+        if let Err(()) = p.sync().await {
+            println!("failed to sync v3 {} ", address)
+        }
+
+        if let Err(()) = p.sync_ticks().await {
+            println!("failed to sync ticks v3 {} ", address)
+        }
+
+        Ok(p)
     }
 }
 
@@ -95,13 +151,13 @@ impl<P: Provider> UniPool for V3Pool<P> {
         let contract = &self.contract;
         let lreq = contract.liquidity().into_transaction_request();
         let sreq = contract.slot0().into_transaction_request();
-
-        println!("=============");
-        println!("liquidity tx: {:?}", &lreq);
-        println!("------------------");
-        println!("slot0 tx: {:?}", &sreq);
-        println!("=============");
-
+        /*
+                println!("=============");
+                println!("liquidity tx: {:?}", &lreq);
+                println!("------------------");
+                println!("slot0 tx: {:?}", &sreq);
+                println!("=============");
+        */
         calls.push(lreq);
         calls.push(sreq);
 
@@ -201,7 +257,8 @@ impl<P: Provider> ConcentratedLiquidity for V3Pool<P> {
         &mut self.state.ticks
     }
 }
-impl<P: Provider + Clone> Into<AnyPool<P>> for V3Pool<P> {
+
+impl<P: Provider> Into<AnyPool<P>> for V3Pool<P> {
     fn into(self) -> AnyPool<P> {
         AnyPool::V3(self)
     }

@@ -25,17 +25,31 @@ pub struct V4Pool<P: Provider> {
     pub state: V3State,
     pub contract: StateViewInstance<P>,
 }
+
 impl<P: Provider> V4Pool<P> {
-    pub fn new(key: V4Key, contract: StateViewInstance<P>) -> Self {
+    pub async fn new(key: V4Key, contract: StateViewInstance<P>) -> Result<Self, ()> {
         let state = V3State::default(I24::ONE);
         let id: PoolKey = key.into();
 
-        Self {
+        let mut pool = Self {
             key,
             id: keccak256(id.abi_encode()),
             state,
             contract,
+        };
+
+        if let Err(()) = pool.sync().await {
+            println!("error requesting liquidity");
+        } else if pool.state.liquidity == U256::ZERO {
+            println!("v4 pool does not have liquidity");
+            return Err(());
         }
+
+        if let Err(()) = pool.sync_ticks().await {
+            println!("error requesting ticks");
+        }
+
+        Ok(pool)
     }
 }
 
@@ -87,12 +101,14 @@ impl<P: Provider> UniPool for V4Pool<P> {
         let sreq = contract
             .getSlot0(self.id)
             .into_transaction_request();
+        /*
 
-        println!("=============");
-        println!("v4 liquidity request {:?}", lreq);
-        println!("------------------");
-        println!("v4 slot0  request {:?}", sreq);
-        println!("=============");
+                println!("=============");
+                println!("v4 liquidity request {:?}", lreq);
+                println!("------------------");
+                println!("v4 slot0  request {:?}", sreq);
+                println!("=============");
+        */
 
         calls.push(lreq);
         calls.push(sreq);
@@ -194,7 +210,7 @@ impl<P: Provider> ConcentratedLiquidity for V4Pool<P> {
     }
 }
 
-impl<P: Provider + Clone> Into<AnyPool<P>> for V4Pool<P> {
+impl<P: Provider> Into<AnyPool<P>> for V4Pool<P> {
     fn into(self) -> AnyPool<P> {
         AnyPool::V4(self)
     }

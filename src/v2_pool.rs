@@ -106,22 +106,8 @@ impl<P: Provider> V2Pool<P> {
         provider: P,
     ) -> Option<V2Pool<P>> {
         let contract = IUniswapV2PairInstance::new(addr, provider);
-        let mut state = V2State::default();
-        let mut one_valid_answer = false;
+        let state = V2State::default();
 
-        if let Ok(r) = contract.getReserves().call().await {
-            let r0 = U256::from(r.reserve0);
-            let r1 = U256::from(r.reserve1);
-            if r0 != U256::ZERO && r1 != U256::ZERO {
-                one_valid_answer = true;
-                state.reserves0 = r0;
-                state.reserves1 = r1;
-            }
-        }
-
-        if !one_valid_answer {
-            return None;
-        }
         let mut key = V2Key {
             fee: 3000,
             address: addr,

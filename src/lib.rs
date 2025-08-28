@@ -13,12 +13,16 @@ pub mod any_pool;
 pub mod any_trade;
 pub mod err;
 
+pub mod factory;
 pub mod pool;
 pub mod sol_types;
 pub mod v2_base;
+pub mod v2_factory;
 pub mod v2_pool;
 pub mod v3_base;
+pub mod v3_factory;
 pub mod v3_pool;
+pub mod v4_factory;
 pub mod v4_pool;
 
 #[cfg(test)]
@@ -118,15 +122,20 @@ mod tests {
                 pools.push(AnyPool::V2(pool));
             }
         }
+
         for p in v3_pools {
-            pools.push(AnyPool::V3(V3Pool::new(p, provider.clone())));
+            if let Ok(v3_pool) = V3Pool::new_from_address(p, provider.clone()).await {
+                pools.push(AnyPool::V3(v3_pool))
+            }
         }
 
         let v4_state_view =
             StateViewInstance::new(V4_ADDR.parse().unwrap(), provider.clone());
 
         for key in keys.clone() {
-            pools.push(V4Pool::new(key.into(), v4_state_view.clone()).into());
+            if let Ok(v4_pool) = V4Pool::new(key.into(), v4_state_view.clone()).await {
+                pools.push(AnyPool::V4(v4_pool));
+            }
         }
 
         let calls = {
@@ -183,15 +192,32 @@ mod tests {
                 for result in join_all(fut).await {}
 
                 for p in &pools {
-                    println!("pool {:?}", p);
+                    match p {
+                        AnyPool::V2(v2_pool) => {
+                            println!("v2 pool {:?}", v2_pool.contract.address());
+                            println!("token 0 {:?}", v2_pool.get_a());
+                            println!("token 0 {:?}", v2_pool.get_b());
+                            println!("token 1 {:?}", v2_pool.get_price());
+                        }
+                        AnyPool::V3(v3_pool) => {
+                            println!("v3 pool {:?}", v3_pool.contract.address());
+                            println!("token 0 {:?}", v3_pool.get_a());
+                            println!("token 1 {:?}", v3_pool.get_b());
+                            println!("token 1 {:?}", v3_pool.get_price());
+                        }
+
+                        AnyPool::V4(v4_pool) => {
+                            println!("v4 pool {:?}", v4_pool.contract.address());
+                            println!("token 0 {:?}", v4_pool.get_a());
+                            println!("token 1 {:?}", v4_pool.get_b());
+                            println!("token 1 {:?}", v4_pool.get_price());
+                        }
+                    }
                 }
             }
         }
 
         println!("done");
-        for p in &pools {
-            print!("{:?}", p);
-        }
         /* */
     }
 }
