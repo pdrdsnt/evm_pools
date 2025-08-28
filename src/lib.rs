@@ -43,10 +43,24 @@ mod tests {
     const BNB_PROVIDER_4: &str = "https://bsc.drpc.org";
     use std::{fmt::Debug, sync::Arc};
 
-    use alloy::primitives::{Address, U256};
+    use alloy::{
+        primitives::{Address, U256},
+        rpc::types::Bundle,
+    };
+    use alloy_sol_types::{abi::decode, SolCall};
+    use futures::{future::join_all, stream::FuturesUnordered};
 
     use crate::{
-        any_pool::AnyPool, sol_types::PoolKey, v2_pool::V2Pool, v3_pool::V3Pool,
+        any_pool::AnyPool,
+        pool::UniPool,
+        sol_types::{
+            IUniswapV2Pair::{getReservesCall, getReservesReturn},
+            PoolKey,
+            StateView::StateViewInstance,
+        },
+        v2_pool::V2Pool,
+        v3_pool::V3Pool,
+        v4_pool::V4Pool,
     };
 
     use super::*;
@@ -62,6 +76,8 @@ mod tests {
             tickSpacing: alloy::primitives::aliases::I24::try_from(60_i32).unwrap(),
             hooks: Address::ZERO,
         };
+
+        let keys = vec![v4_key];
 
         let usdc_usd_address: Address = V3_USDC_USD.parse().unwrap();
         let usdt_bnb_address: Address = V3_USDT_BNB_ADDR.parse().unwrap();
@@ -94,6 +110,7 @@ mod tests {
         let amount_in = U256::from(1000000000000_u64); // 1 USD
         let from_token_0 = true;
         let mut pools = Vec::new();
+
         for p in v2_pools {
             if let Some(pool) =
                 V2Pool::create_v2_from_address(p, Some(3000), provider.clone()).await
@@ -104,11 +121,78 @@ mod tests {
         for p in v3_pools {
             pools.push(AnyPool::V3(V3Pool::new(p, provider.clone())));
         }
-        for p in v4_pools {
-            pools.push(
-                V2Pool::create_v2_from_address(p, Some(3000), provider.clone()).into(),
-            );
+
+        let v4_state_view =
+            StateViewInstance::new(V4_ADDR.parse().unwrap(), provider.clone());
+
+        for key in keys.clone() {
+            pools.push(V4Pool::new(key.into(), v4_state_view.clone()).into());
         }
+
+        let calls = {
+            let mut _calls = Vec::new();
+            for pool in &pools {
+                _calls.push(Bundle {
+                    transactions: pool.create_sync_call(),
+                    block_override: None,
+                });
+            }
+            _calls
+        };
+
+        match provider.call_many(calls.as_slice()).await {
+            Ok(results) => {
+                for (i, result) in results.into_iter().enumerate() {
+                    println!("decoding result {:?}", result);
+                    let current_pool = &mut pools[i];
+                    println!("for pool {:?}", current_pool);
+
+                    match current_pool {
+                        AnyPool::V2(v2_pool) => {
+                            match v2_pool.decode_sync_result(result) {
+                                Ok(_) => (),
+                                Err(err) => {
+                                    println!("error updating v2 {:?}", err)
+                                }
+                            };
+                        }
+                        AnyPool::V3(v3_pool) => {
+                            match v3_pool.decode_sync_result(result) {
+                                Ok(_) => (),
+                                Err(err) => eprintln!("error updating v3 {:?}", err),
+                            }
+                        }
+                        AnyPool::V4(v4_pool) => {
+                            match v4_pool.decode_sync_result(result) {
+                                Ok(_) => (),
+                                Err(err) => println!("error updating v4 {:?}", err),
+                            }
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                println!("batch call err: {}", err);
+                println!("trying normal requests");
+                let mut fut = Vec::new();
+                for p in &mut pools {
+                    let update = p.super_sync();
+                    fut.push(update);
+                }
+
+                for result in join_all(fut).await {}
+
+                for p in &pools {
+                    println!("pool {:?}", p);
+                }
+            }
+        }
+
+        println!("done");
+        for p in &pools {
+            print!("{:?}", p);
+        }
+        /* */
     }
 }
 

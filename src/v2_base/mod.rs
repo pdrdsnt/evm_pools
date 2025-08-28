@@ -7,6 +7,7 @@ pub struct V2State {
     pub reserves1: U256,
 }
 
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct V2Key {
     pub fee: u32,
     pub address: Address,

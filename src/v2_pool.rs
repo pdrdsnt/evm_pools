@@ -3,19 +3,20 @@ use std::{future::Future, pin::Pin};
 use crate::{
     any_pool::AnyPool,
     pool::UniPool,
-    sol_types::IUniswapV2Pair::IUniswapV2PairInstance,
+    sol_types::IUniswapV2Pair::{getReservesCall, IUniswapV2PairInstance},
     v2_base::{V2Key, V2State},
 };
 
 use alloy::{
     primitives::{aliases::U112, Address, U256},
-    rpc::types::{Bundle, TransactionRequest},
+    rpc::types::{EthCallResponse, TransactionRequest},
 };
 use alloy_provider::Provider;
+use alloy_sol_types::SolCall;
 pub struct V2Pool<P: Provider> {
-    key: V2Key,
-    state: V2State,
-    contract: IUniswapV2PairInstance<P>,
+    pub key: V2Key,
+    pub state: V2State,
+    pub contract: IUniswapV2PairInstance<P>,
 }
 
 impl<P: Provider> UniPool for V2Pool<P> {
@@ -54,6 +55,43 @@ impl<P: Provider> UniPool for V2Pool<P> {
     fn create_sync_call(&self) -> Vec<TransactionRequest> {
         let contract = &self.contract;
         vec![contract.getReserves().into_transaction_request()]
+    }
+
+    fn decode_sync_result(&mut self, response: Vec<EthCallResponse>) -> Result<(), ()> {
+        if response.is_empty() {
+            return Err(());
+        }
+        let r = &response[0];
+        if let Some(bytes) = &r.value {
+            let r =
+                getReservesCall::abi_decode_returns(bytes.to_vec().as_slice()).unwrap();
+
+            self.state.reserves0 = U256::from(r.reserve0);
+            self.state.reserves1 = U256::from(r.reserve1);
+        } else {
+            return Err(());
+        }
+
+        Ok(())
+    }
+
+    fn get_a(&self) -> &Address {
+        &self.key.token0
+    }
+
+    fn get_b(&self) -> &Address {
+        &self.key.token1
+    }
+
+    fn get_price(&self) -> U256 {
+        self.state
+            .reserves1
+            .checked_div(self.state.reserves0)
+            .unwrap_or_default()
+    }
+
+    fn get_liquidity(&self) -> U256 {
+        U256::from(self.state.reserves0) + U256::from(self.state.reserves1)
     }
 }
 
