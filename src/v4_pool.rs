@@ -28,7 +28,7 @@ pub struct V4Pool<P: Provider> {
 
 impl<P: Provider> V4Pool<P> {
     pub async fn new(key: V4Key, contract: StateViewInstance<P>) -> Result<Self, ()> {
-        let state = V3State::default(I24::ONE);
+        let state = V3State::default(key.tickspacing);
         let id: PoolKey = key.into();
 
         let mut pool = Self {
@@ -37,10 +37,12 @@ impl<P: Provider> V4Pool<P> {
             state,
             contract,
         };
+        println!("new v4 id: {}", pool.id);
 
         if let Err(()) = pool.sync().await {
             println!("error requesting liquidity");
-        } else if pool.state.liquidity == U256::ZERO {
+        }
+        if pool.state.liquidity == U256::ZERO {
             println!("v4 pool does not have liquidity");
             return Err(());
         }
@@ -73,10 +75,11 @@ impl<P: Provider> UniPool for V4Pool<P> {
         let contract = &self.contract;
         let id = self.id;
         if let Ok(liquidity) = contract.getLiquidity(id).call().await {
-            state.liquidity = U256::from(liquidity);
-            if liquidity == 0 {
+            println!("liquidity requested {}", liquidity);
+            if liquidity == 0_u128 {
                 return Err(());
             }
+            state.liquidity = U256::from(liquidity);
         };
 
         if let Ok(slot0) = contract.getSlot0(id).call().await {

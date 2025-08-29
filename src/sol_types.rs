@@ -14,6 +14,15 @@ struct PoolKey {
 
 }
 
+// Event signature from Uniswap V4 PoolManager
+    event PoolInitialized(
+        address currency0,
+        address currency1,
+        uint24 fee,
+        int24 tickSpacing,
+        address hooks,
+        bytes32 poolId
+    );
 #[sol(rpc)]
 interface IUniswapV2Factory {
         function getPair(address tokenA, address tokenB) external view returns (address pair);

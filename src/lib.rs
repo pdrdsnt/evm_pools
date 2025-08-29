@@ -45,13 +45,17 @@ mod tests {
     const BNB_PROVIDER_2: &str = "https://bsc.rpc.blxrbdn.com";
     const BNB_PROVIDER_3: &str = "https://bsc-mainnet.public.blastapi.io";
     const BNB_PROVIDER_4: &str = "https://bsc.drpc.org";
-    use std::{fmt::Debug, sync::Arc};
+    use std::{
+        fmt::{format, Debug},
+        fs::write,
+        sync::Arc,
+    };
 
     use alloy::{
         primitives::{Address, U256},
-        rpc::types::Bundle,
+        rpc::types::{Bundle, Filter},
     };
-    use alloy_sol_types::{abi::decode, SolCall};
+    use alloy_sol_types::{abi::decode, SolCall, SolEvent};
     use futures::{future::join_all, stream::FuturesUnordered};
 
     use crate::{
@@ -59,7 +63,7 @@ mod tests {
         pool::UniPool,
         sol_types::{
             IUniswapV2Pair::{getReservesCall, getReservesReturn},
-            PoolKey,
+            PoolInitialized, PoolKey,
             StateView::StateViewInstance,
         },
         v2_pool::V2Pool,
@@ -74,14 +78,64 @@ mod tests {
         let v4_key: PoolKey = PoolKey {
             currency0: Address::from_str("0x55d398326f99059fF775485246999027B3197955")
                 .unwrap(),
-            currency1: Address::from_str("0x55d398326f99059fF775485246999027B3197955")
+            currency1: Address::from_str("0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d")
                 .unwrap(),
-            fee: alloy::primitives::aliases::U24::from(6),
+            fee: alloy::primitives::aliases::U24::from(43),
             tickSpacing: alloy::primitives::aliases::I24::try_from(60_i32).unwrap(),
             hooks: Address::ZERO,
         };
 
-        let keys = vec![v4_key];
+        let bnb_provider_urls = vec![
+            BNB_PROVIDER.to_string(),
+            BNB_PROVIDER_2.to_string(),
+            BNB_PROVIDER_3.to_string(),
+            BNB_PROVIDER_4.to_string(),
+        ];
+
+        let provider = generate_fallback_provider(bnb_provider_urls);
+        let current_block = provider.get_block_number().await.unwrap();
+        let step = 500;
+        let mut from_block = current_block;
+        let mut to_block = current_block - step;
+        let min_block = 50000000;
+        println!("block {}", current_block);
+        let mut keys = Vec::new();
+
+        keys.push(v4_key);
+        let mut keis = Vec::new();
+
+        while to_block > min_block {
+            let v4_created_event_filter = Filter::new()
+                .address(Address::from_str(V4_ADDR).unwrap())
+                .from_block(to_block)
+                .to_block(from_block);
+
+            let logs = provider.get_logs(&v4_created_event_filter).await;
+
+            match logs {
+                Ok(mut ok) => {
+                    println!("{} - {}", from_block, to_block);
+                    println!("all v4 pools {:?}", ok);
+                    keis.append(&mut ok);
+                    let mut data = String::new();
+                    for k in ok {
+                        data += &k.data().data.to_string();
+                    }
+                    if !data.is_empty() {
+                        if let Err(er) = write(
+                            format!("./v4_events/{}-{}.logs", from_block, to_block),
+                            data,
+                        ) {
+                            println!("err saving {}", er);
+                        }
+                    }
+                }
+                Err(err) => println!("err getting logs {:?}", err),
+            }
+
+            from_block -= step;
+            to_block -= step;
+        }
 
         let usdc_usd_address: Address = V3_USDC_USD.parse().unwrap();
         let usdt_bnb_address: Address = V3_USDT_BNB_ADDR.parse().unwrap();
@@ -103,31 +157,25 @@ mod tests {
             usdc_usd_address,
         ];
 
-        let bnb_provider_urls = vec![
-            BNB_PROVIDER,
-            BNB_PROVIDER_2,
-            BNB_PROVIDER_3,
-            BNB_PROVIDER_4,
-        ];
-
-        let provider = generate_fallback_provider(bnb_provider_urls);
         let amount_in = U256::from(1000000000000_u64); // 1 USD
         let from_token_0 = true;
         let mut pools = Vec::new();
 
-        for p in v2_pools {
-            if let Some(pool) =
-                V2Pool::create_v2_from_address(p, Some(3000), provider.clone()).await
-            {
-                pools.push(AnyPool::V2(pool));
-            }
-        }
+        /*
+                for p in v2_pools {
+                    if let Some(pool) =
+                        V2Pool::create_v2_from_address(p, Some(3000), provider.clone()).await
+                    {
+                        pools.push(AnyPool::V2(pool));
+                    }
+                }
 
-        for p in v3_pools {
-            if let Ok(v3_pool) = V3Pool::new_from_address(p, provider.clone()).await {
-                pools.push(AnyPool::V3(v3_pool))
-            }
-        }
+                for p in v3_pools {
+                    if let Ok(v3_pool) = V3Pool::new_from_address(p, provider.clone()).await {
+                        pools.push(AnyPool::V3(v3_pool))
+                    }
+                }
+        */
 
         let v4_state_view =
             StateViewInstance::new(V4_ADDR.parse().unwrap(), provider.clone());
@@ -197,20 +245,25 @@ mod tests {
                             println!("v2 pool {:?}", v2_pool.contract.address());
                             println!("token 0 {:?}", v2_pool.get_a());
                             println!("token 0 {:?}", v2_pool.get_b());
-                            println!("token 1 {:?}", v2_pool.get_price());
+                            println!("price {:?}", v2_pool.get_price());
+                            println!("liquidity {}", v2_pool.get_liquidity());
                         }
                         AnyPool::V3(v3_pool) => {
                             println!("v3 pool {:?}", v3_pool.contract.address());
                             println!("token 0 {:?}", v3_pool.get_a());
                             println!("token 1 {:?}", v3_pool.get_b());
-                            println!("token 1 {:?}", v3_pool.get_price());
+                            println!("liquidity {:?}", v3_pool.get_liquidity());
+
+                            println!("price {:?}", v3_pool.get_price());
                         }
 
                         AnyPool::V4(v4_pool) => {
                             println!("v4 pool {:?}", v4_pool.contract.address());
                             println!("token 0 {:?}", v4_pool.get_a());
                             println!("token 1 {:?}", v4_pool.get_b());
-                            println!("token 1 {:?}", v4_pool.get_price());
+                            println!("liquidity {:?}", v4_pool.get_liquidity());
+
+                            println!("price {:?}", v4_pool.get_price());
                         }
                     }
                 }
@@ -222,7 +275,7 @@ mod tests {
     }
 }
 
-pub fn generate_fallback_provider(urls: Vec<&str>) -> impl Provider + Clone {
+pub fn generate_fallback_provider(urls: Vec<String>) -> impl Provider + Clone {
     let layer = FallbackLayer::default()
         .with_active_transport_count(NonZeroUsize::new(urls.len()).unwrap());
     let mut transports = Vec::new();
