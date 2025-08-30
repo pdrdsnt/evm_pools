@@ -8,21 +8,16 @@ use alloy_provider::{Provider, ProviderBuilder};
 use reqwest::Url;
 use tower::ServiceBuilder;
 
-pub mod any_factory;
 pub mod any_pool;
 pub mod any_trade;
 pub mod err;
 
-pub mod factory;
 pub mod pool;
 pub mod sol_types;
 pub mod v2_base;
-pub mod v2_factory;
 pub mod v2_pool;
 pub mod v3_base;
-pub mod v3_factory;
 pub mod v3_pool;
-pub mod v4_factory;
 pub mod v4_pool;
 
 #[cfg(test)]
