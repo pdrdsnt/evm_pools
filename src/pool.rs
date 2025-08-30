@@ -1,8 +1,8 @@
-use std::{future::Future, marker::PhantomData, pin::Pin};
+use std::marker::PhantomData;
 
 use alloy::{
     primitives::{aliases::I24, Address, U256},
-    rpc::types::{Bundle, EthCallResponse, TransactionRequest},
+    rpc::types::{EthCallResponse, TransactionRequest},
 };
 use alloy_contract::EthCall;
 use futures::future::join_all;

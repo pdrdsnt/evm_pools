@@ -2,12 +2,8 @@ use alloy::primitives::{
     aliases::{I24, U24},
     Address, U256,
 };
-use serde::{Deserialize, Serialize};
 
-use crate::v3_base::{
-    bitmap::BitMap,
-    ticks::{Tick, Ticks},
-};
+use crate::v3_base::ticks::Tick;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct TradeReceipt {

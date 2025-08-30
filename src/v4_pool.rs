@@ -11,7 +11,7 @@ use crate::{
     pool::{ConcentratedLiquidity, UniPool},
     sol_types::{
         PoolKey,
-        StateView::{getLiquidityCall, getSlot0Call, getTickInfoCall, StateViewInstance},
+        StateView::{getLiquidityCall, getSlot0Call, StateViewInstance},
     },
     v3_base::{
         ticks::{Tick, Ticks},

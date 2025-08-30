@@ -40,29 +40,22 @@ mod tests {
     const BNB_PROVIDER_2: &str = "https://bsc.rpc.blxrbdn.com";
     const BNB_PROVIDER_3: &str = "https://bsc-mainnet.public.blastapi.io";
     const BNB_PROVIDER_4: &str = "https://bsc.drpc.org";
-    use std::{
-        fmt::{format, Debug},
-        fs::write,
-        sync::Arc,
-    };
+    use std::fs::write;
 
     use alloy::{
         primitives::{Address, U256},
         rpc::types::{Bundle, Filter},
     };
-    use alloy_sol_types::{abi::decode, SolCall, SolEvent};
-    use futures::{future::join_all, stream::FuturesUnordered};
+    use alloy_sol_types::{SolCall, SolEvent};
+    use futures::future::join_all;
 
     use crate::{
         any_pool::AnyPool,
         pool::UniPool,
         sol_types::{
-            IUniswapV2Pair::{getReservesCall, getReservesReturn},
-            PoolInitialized, PoolKey,
+            PoolKey,
             StateView::StateViewInstance,
         },
-        v2_pool::V2Pool,
-        v3_pool::V3Pool,
         v4_pool::V4Pool,
     };
 

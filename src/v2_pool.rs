@@ -1,5 +1,3 @@
-use std::{future::Future, pin::Pin};
-
 use crate::{
     any_pool::AnyPool,
     pool::UniPool,
@@ -16,7 +14,48 @@ use alloy_sol_types::SolCall;
 pub struct V2Pool<P: Provider> {
     pub key: V2Key,
     pub state: V2State,
+    pub factory: Address,
     pub contract: IUniswapV2PairInstance<P>,
+}
+
+impl<P: Provider> V2Pool<P> {
+    pub async fn create_v2_from_address(
+        addr: Address,
+        fee: Option<u32>,
+        provider: P,
+    ) -> Option<V2Pool<P>> {
+        let contract = IUniswapV2PairInstance::new(addr, provider);
+        let state = V2State::default();
+
+        let mut key = V2Key {
+            fee: 3000,
+            address: addr,
+            token0: Address::ZERO,
+            token1: Address::ZERO,
+        };
+        let mut factory = Address::ZERO;
+
+        if let Ok(f) = contract.factory().call().await {
+            factory = f;
+        }
+        if let Ok(t0) = contract.token0().call().await {
+            key.token0 = t0;
+        }
+        if let Ok(t1) = contract.token1().call().await {
+            key.token1 = t1;
+        }
+
+        if let Some(f) = fee {
+            key.fee = f;
+        }
+
+        Some(Self {
+            key,
+            factory,
+            state,
+            contract,
+        })
+    }
 }
 
 impl<P: Provider> UniPool for V2Pool<P> {
@@ -92,45 +131,6 @@ impl<P: Provider> UniPool for V2Pool<P> {
 
     fn get_liquidity(&self) -> U256 {
         U256::from(self.state.reserves0) + U256::from(self.state.reserves1)
-    }
-}
-
-impl<P: Provider> V2Pool<P> {
-    pub async fn create_v2_from_address(
-        //v2 receives a fee since is hard coded,
-        //we need to match know factories with fees before calling
-        //or passing the list here and calling factory()
-        //or just using the uniswap default 3000
-        addr: Address,
-        fee: Option<u32>,
-        provider: P,
-    ) -> Option<V2Pool<P>> {
-        let contract = IUniswapV2PairInstance::new(addr, provider);
-        let state = V2State::default();
-
-        let mut key = V2Key {
-            fee: 3000,
-            address: addr,
-            token0: Address::ZERO,
-            token1: Address::ZERO,
-        };
-
-        if let Ok(t0) = contract.token0().call().await {
-            key.token0 = t0;
-        }
-        if let Ok(t1) = contract.token1().call().await {
-            key.token1 = t1;
-        }
-
-        if let Some(f) = fee {
-            key.fee = f;
-        }
-
-        Some(Self {
-            key,
-            state,
-            contract,
-        })
     }
 }
 impl<P: Provider + Clone> Into<AnyPool<P>> for V2Pool<P> {

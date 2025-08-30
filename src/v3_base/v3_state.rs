@@ -1,7 +1,6 @@
 use alloy::primitives::{aliases::I24, ruint::aliases::U256};
 use serde::{Deserialize, Serialize};
 
-use crate::v3_base::{bitmap, v3_state};
 
 use super::{bitmap::BitMap, ticks::Ticks};
 

@@ -116,6 +116,7 @@ interface IUniswapV2Pair {
         function transfer(address to, uint256 value) external returns (bool);
         function transferFrom(address from, address to, uint256 value) external returns (bool);
 
+        function factory() external view returns (address);
         function token0() external view returns (address);
         function token1() external view returns (address);
         function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);

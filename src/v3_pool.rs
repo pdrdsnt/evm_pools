@@ -1,37 +1,19 @@
-use std::{
-    future::{Future, IntoFuture},
-    marker::PhantomData,
-    task::Poll,
-};
+use std::future::Future;
 
 use alloy::{
-    primitives::{aliases::I24, U160, U256},
-    rpc::{
-        client::ClientBuilder,
-        types::{Bundle, EthCallResponse, TransactionRequest},
-    },
+    primitives::{aliases::I24, Address, U160, U256},
+    rpc::types::{EthCallResponse, TransactionRequest},
 };
-use alloy_contract::{CallBuilder, EthCall};
-use alloy_provider::{Caller, EthCallMany, MulticallBuilder, Provider, ProviderBuilder};
+use alloy_provider::{Caller, Provider};
 use alloy_sol_types::SolCall;
-use futures::{
-    future::{try_join, try_join4},
-    stream::{FuturesOrdered, FuturesUnordered},
-    StreamExt,
-};
-use reqwest::Client;
 use tokio::try_join;
 
 use crate::{
     any_pool::{AnyPool, V4Key},
     any_trade::UniTrade,
-    pool::{ConcentratedLiquidity, UniPool, UniTickCall},
-    sol_types::{
-        StateView::getTickLiquidityCall,
-        V3Pool::{liquidityCall, slot0Call, ticksCall, V3PoolInstance},
-    },
+    pool::{ConcentratedLiquidity, UniPool},
+    sol_types::V3Pool::{liquidityCall, slot0Call, V3PoolInstance},
     v3_base::{
-        bitmap_math,
         ticks::{Tick, Ticks},
         v3_state::V3State,
     },
@@ -40,6 +22,7 @@ use crate::{
 pub struct V3Pool<P: Provider> {
     pub key: V4Key,
     pub state: V3State,
+    pub factory: Address,
     pub contract: V3PoolInstance<P>,
 }
 
@@ -47,6 +30,7 @@ impl<P: Provider> V3Pool<P> {
     pub fn new_from_key(
         address: alloy::primitives::Address,
         provider: P,
+        factory: Address,
         key: V4Key,
     ) -> Result<Self, ()> {
         if key.tickspacing <= I24::ZERO {
@@ -54,11 +38,12 @@ impl<P: Provider> V3Pool<P> {
         }
         let contract = V3PoolInstance::new(address, provider);
 
-        let state = V3State::default(I24::ONE);
+        let state = V3State::default(key.tickspacing);
 
         let p = Self {
             key,
             state,
+            factory,
             contract,
         };
 
@@ -69,8 +54,6 @@ impl<P: Provider> V3Pool<P> {
         provider: P,
     ) -> Result<Self, ()> {
         let contract = V3PoolInstance::new(address, provider);
-
-        let state = V3State::default(I24::ONE);
 
         let mut key = V4Key::default();
 
@@ -90,8 +73,17 @@ impl<P: Provider> V3Pool<P> {
             return Err(());
         }
 
+        let state = V3State::default(key.tickspacing);
+
+        let mut factory = Address::ZERO;
+
+        if let Ok(f) = contract.factory().call().await {
+            factory = f;
+        }
+
         let mut p = Self {
             key,
+            factory,
             state,
             contract,
         };
